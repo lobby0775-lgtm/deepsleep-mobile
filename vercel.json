@@ -1,0 +1,17 @@
+{
+  "buildCommand": "expo build:web",
+  "outputDirectory": "web-build",
+  "devCommand": "expo start --web",
+  "installCommand": "npm install",
+  "framework": "expo",
+  "rewrites": [
+    {
+      "source": "/:path*",
+      "destination": "/"
+    }
+  ],
+  "env": {
+    "EXPO_PUBLIC_SUPABASE_URL": "@expo_public_supabase_url",
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": "@expo_public_supabase_anon_key"
+  }
+}
