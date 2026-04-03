@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>DeepSleep Diagnostic</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .test { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .pass { background: #d4edda; border-color: #c3e6cb; }
+        .fail { background: #f8d7da; border-color: #f5c6cb; }
+        .loading { background: #fff3cd; border-color: #ffeaa7; }
+        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        #console { background: #f8f9fa; padding: 15px; border-radius: 5px; font-family: monospace; white-space: pre-wrap; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>DeepSleep Web App Diagnostic</h1>
+    
+    <div class="test" id="serverTest">
+        <h3>1. Server Connection Test</h3>
+        <p>Testing connection to web servers...</p>
+    </div>
+    
+    <div class="test" id="jsTest">
+        <h3>2. JavaScript Loading Test</h3>
+        <p>Testing if JavaScript files load...</p>
+    </div>
+    
+    <div class="test" id="reactTest">
+        <h3>3. React App Test</h3>
+        <p>Testing if React app initializes...</p>
+    </div>
+    
+    <div class="test">
+        <h3>4. Browser Console</h3>
+        <p>Open Developer Tools (F12) and check Console tab for errors.</p>
+        <div id="console">Console output will appear here...</div>
+    </div>
+    
+    <div class="test">
+        <h3>5. Quick Links</h3>
+        <p>
+            <a href="http://localhost:3000" target="_blank">Local Built App</a> |
+            <a href="http://localhost:8080" target="_blank">Dev Server</a> |
+            <a href="https://deepsleep-mobile.vercel.app" target="_blank">Vercel Production</a>
+        </p>
+    </div>
+    
+    <button onclick="runAllTests()">Run All Tests</button>
+    
+    <script>
+        const consoleOutput = [];
+        const originalConsole = {
+            log: console.log,
+            error: console.error,
+            warn: console.warn
+        };
+        
+        // Capture console output
+        ['log', 'error', 'warn'].forEach(method => {
+            console[method] = function(...args) {
+                originalConsole[method].apply(console, args);
+                consoleOutput.push(`[${method.toUpperCase()}] ${args.join(' ')}`);
+                updateConsole();
+            };
+        });
+        
+        function updateConsole() {
+            document.getElementById('console').textContent = consoleOutput.join('\n');
+        }
+        
+        async function testServer(url, elementId) {
+            const element = document.getElementById(elementId);
+            try {
+                const response = await fetch(url);
+                if (response.ok) {
+                    const text = await response.text();
+                    element.innerHTML = `<h3>${url}</h3><p class="pass">✅ Connected (${response.status})</p>`;
+                    element.className = 'test pass';
+                    return { success: true, text };
+                } else {
+                    element.innerHTML = `<h3>${url}</h3><p class="fail">❌ Failed (${response.status})</p>`;
+                    element.className = 'test fail';
+                    return { success: false };
+                }
+            } catch (error) {
+                element.innerHTML = `<h3>${url}</h3><p class="fail">❌ Error: ${error.message}</p>`;
+                element.className = 'test fail';
+                return { success: false, error };
+            }
+        }
+        
+        async function testJavaScript() {
+            const element = document.getElementById('jsTest');
+            try {
+                // Try to load the main JS bundle
+                const response = await fetch('http://localhost:3000/static/js/bundle.js');
+                if (response.ok) {
+                    element.innerHTML = `<h3>JavaScript Files</h3><p class="pass">✅ JS files loading correctly</p>`;
+                    element.className = 'test pass';
+                    return true;
+                }
+            } catch (error) {
+                // Try alternative path
+                try {
+                    const files = await fetch('http://localhost:3000');
+                    const html = await files.text();
+                    const hasScripts = html.includes('<script') && html.includes('.js');
+                    if (hasScripts) {
+                        element.innerHTML = `<h3>JavaScript Files</h3><p class="pass">✅ Script tags found in HTML</p>`;
+                        element.className = 'test pass';
+                        return true;
+                    }
+                } catch (e) {
+                    // Continue to failure
+                }
+            }
+            
+            element.innerHTML = `<h3>JavaScript Files</h3><p class="fail">❌ JS files not loading</p>`;
+            element.className = 'test fail';
+            return false;
+        }
+        
+        async function testReact() {
+            const element = document.getElementById('reactTest');
+            element.innerHTML = `<h3>React App</h3><p class="loading">Testing React initialization...</p>`;
+            element.className = 'test loading';
+            
+            // Wait a bit for any React errors to appear in console
+            setTimeout(() => {
+                const hasReactErrors = consoleOutput.some(line => 
+                    line.includes('React') || 
+                    line.includes('Uncaught') || 
+                    line.includes('Error')
+                );
+                
+                if (hasReactErrors) {
+                    element.innerHTML = `<h3>React App</h3><p class="fail">❌ React errors detected (check console)</p>`;
+                    element.className = 'test fail';
+                } else {
+                    element.innerHTML = `<h3>React App</h3><p class="pass">✅ No React errors detected</p>`;
+                    element.className = 'test pass';
+                }
+            }, 2000);
+        }
+        
+        async function runAllTests() {
+            consoleOutput.length = 0;
+            updateConsole();
+            
+            // Test servers
+            await testServer('http://localhost:3000', 'serverTest');
+            
+            // Test JavaScript
+            await testJavaScript();
+            
+            // Test React
+            await testReact();
+            
+            console.log('All tests completed!');
+        }
+        
+        // Run tests automatically
+        window.onload = function() {
+            setTimeout(runAllTests, 1000);
+        };
+    </script>
+</body>
+</html>

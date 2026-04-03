@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Web Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>DeepSleep Web App Test</h1>
+    
+    <div id="status">
+        <div class="status">Testing connection...</div>
+    </div>
+    
+    <h2>Test Links:</h2>
+    <ul>
+        <li><a href="http://localhost:8080" target="_blank">Development Server (port 8080)</a></li>
+        <li><a href="http://localhost:3000" target="_blank">Built App (port 3000)</a></li>
+        <li><a href="https://deepsleep-mobile.vercel.app" target="_blank">Vercel Production</a></li>
+    </ul>
+    
+    <script>
+        async function testConnection(url) {
+            try {
+                const response = await fetch(url);
+                const status = response.status;
+                const html = await response.text();
+                const hasTitle = html.includes('<title>');
+                const hasReact = html.includes('React');
+                
+                return {
+                    url,
+                    status,
+                    hasTitle,
+                    hasReact,
+                    success: status === 200
+                };
+            } catch (error) {
+                return {
+                    url,
+                    error: error.message,
+                    success: false
+                };
+            }
+        }
+        
+        async function runTests() {
+            const urls = [
+                'http://localhost:8080',
+                'http://localhost:3000',
+                'https://deepsleep-mobile.vercel.app'
+            ];
+            
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = '';
+            
+            for (const url of urls) {
+                const result = await testConnection(url);
+                const div = document.createElement('div');
+                div.className = `status ${result.success ? 'success' : 'error'}`;
+                
+                if (result.success) {
+                    div.innerHTML = `
+                        <strong>${url}</strong><br>
+                        Status: ${result.status} OK<br>
+                        Has title: ${result.hasTitle ? 'Yes' : 'No'}<br>
+                        Has React: ${result.hasReact ? 'Yes' : 'No'}
+                    `;
+                } else {
+                    div.innerHTML = `
+                        <strong>${url}</strong><br>
+                        Error: ${result.error || `Status ${result.status}`}
+                    `;
+                }
+                
+                statusDiv.appendChild(div);
+            }
+        }
+        
+        // Run tests when page loads
+        window.onload = runTests;
+    </script>
+</body>
+</html>
