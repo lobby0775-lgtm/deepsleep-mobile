@@ -23,4 +23,17 @@ All rules and market figures live in `src/calc/defaults.ts`, with the date they 
 
 ## Deploying
 
+### Cloudflare Pages
+
+Set `CLOUDFLARE_API_TOKEN` (a token with the **Cloudflare Pages: Edit** permission) and `CLOUDFLARE_ACCOUNT_ID`, then run:
+
+```bash
+npx wrangler pages project create openbonnet --production-branch main   # first time only
+npm run deploy
+```
+
+The site goes live at `https://openbonnet.pages.dev`.
+
+### Vercel
+
 Import the repo into Vercel and set **Root Directory** to `sg-car-calculator`. `vercel.json` sets up the Vite build. Any static host that serves `dist/` also works.
