@@ -1,7 +1,7 @@
 import { COE_LATEST, MARKET_FLAT_RATE, type CoeCategory } from '../calc/defaults';
 import { decodeDeal, type Freebie } from '../calc/deal';
 import { money, pct } from '../calc/format';
-import { Check, FlagList, NumberField, Segmented, SelectField, Stat } from '../components/Fields';
+import { Check, FlagList, NumberField, Segmented, SelectField, Stat, Tier } from '../components/Fields';
 import { usePersistentState } from '../state';
 
 const DEFAULTS = {
@@ -62,97 +62,146 @@ export function DealDecoder() {
 
       <div className="cols">
         <div className="stack">
-          <section>
-            <div className="rule-head"><h2>Price and COE</h2></div>
-            <div className="grid-2">
-              <NumberField label="Package price" prefix="$" value={s.packagePrice} onChange={(v) => set('packagePrice', v)} />
-              <NumberField label="OMV" help="omv" prefix="$" value={s.omv} onChange={(v) => set('omv', v)} hint="Sets how much you can borrow" />
-              <SelectField label="COE category" value={s.category} onChange={(v) => { set('category', v); set('coeLatest', COE_LATEST[v]); }}
-                options={[{ value: 'A', label: 'Cat A' }, { value: 'B', label: 'Cat B' }]} />
-              <NumberField label="Admin, handling & other fees" prefix="$" value={s.extraFees} onChange={(v) => set('extraFees', v)} hint="Anything added on top of the package price" />
+          <div className="answer">
+            <div className="figure-xl">{money(r.totalOutlay)}</div>
+            <div>
+              <div className="label small muted">All-in cost</div>
+              <div className="small num">{s.takeLoan ? `${money(r.monthly)}/mo` : 'paid in full'}</div>
             </div>
-            <div className="stack" style={{ marginTop: 16 }}>
-              <Segmented label="COE guarantee" value={s.coeGuaranteed ? 'yes' : 'no'} onChange={(v) => set('coeGuaranteed', v === 'yes')}
-                options={[{ value: 'yes', label: 'Guaranteed COE' }, { value: 'no', label: 'Non-guaranteed COE' }]} />
-              {!s.coeGuaranteed && (
+          </div>
+
+          <section>
+            <div className="grid-2">
+              <NumberField label="Package price" prefix="$" value={s.packagePrice} onChange={(v) => set('packagePrice', v)}
+                hint="The headline number on the quote" />
+              <NumberField label="Admin &amp; other fees" prefix="$" value={s.extraFees} onChange={(v) => set('extraFees', v)}
+                hint="Anything added on top" />
+            </div>
+            <p className="small muted" style={{ marginTop: 12, marginBottom: 0, maxWidth: '54ch' }}>
+              Start with the price and the fees. That alone tells you most of the story — open the rest if the deal includes
+              a loan, bundled insurance, freebies or a trade-in.
+            </p>
+          </section>
+
+          <div className="tiers">
+            <Tier
+              label="COE terms"
+              badge={s.coeGuaranteed ? 'guaranteed' : 'non-guaranteed'}
+              summary={s.coeGuaranteed
+                ? 'COE secured by the dealer'
+                : `Assumes ${money(s.coeInPackage)}, latest ${money(s.coeLatest)} · ${s.bidsIncluded} bids · ${s.topUpPaidBy === 'buyer' ? 'you top up' : 'dealer absorbs'}`}
+            >
+              <div className="grid-2">
+                <NumberField label="OMV" help="omv" prefix="$" value={s.omv} onChange={(v) => set('omv', v)} hint="Sets how much you can borrow" />
+                <SelectField label="COE category" value={s.category} onChange={(v) => { set('category', v); set('coeLatest', COE_LATEST[v]); }}
+                  options={[{ value: 'A', label: 'Cat A' }, { value: 'B', label: 'Cat B' }]} />
+              </div>
+              <div className="stack">
+                <Segmented label="COE guarantee" value={s.coeGuaranteed ? 'yes' : 'no'} onChange={(v) => set('coeGuaranteed', v === 'yes')}
+                  options={[{ value: 'yes', label: 'Guaranteed COE' }, { value: 'no', label: 'Non-guaranteed COE' }]} />
+                {!s.coeGuaranteed && (
+                  <div className="grid-2">
+                    <NumberField label="COE the price assumes" prefix="$" value={s.coeInPackage} onChange={(v) => set('coeInPackage', v)} hint="Ask the salesperson" />
+                    <NumberField label="Latest COE" prefix="$" value={s.coeLatest} onChange={(v) => set('coeLatest', v)} />
+                    <NumberField label="Bids included" value={s.bidsIncluded} onChange={(v) => set('bidsIncluded', v)} min={0} max={24} />
+                    <SelectField label="If COE goes higher, who pays?" value={s.topUpPaidBy} onChange={(v) => set('topUpPaidBy', v)}
+                      options={[{ value: 'buyer', label: 'I top up' }, { value: 'dealer', label: 'Dealer absorbs it' }]} />
+                  </div>
+                )}
+                <Check checked={s.depositRefundable} onChange={(v) => set('depositRefundable', v)}>
+                  Deposit is refunded if COE isn't won or my loan isn't approved (in writing)
+                </Check>
+              </div>
+            </Tier>
+
+            <Tier
+              label="The loan"
+              badge={s.takeLoan ? money(s.loanAmount) : 'none'}
+              summary={s.takeLoan
+                ? `${s.loanYears} yrs at ${pct(s.loanFlatRate, 2)} flat · ${money(r.interest)} interest`
+                : 'No dealer loan in this deal'}
+            >
+              <Check checked={s.takeLoan} onChange={(v) => set('takeLoan', v)}>The deal includes the dealer's loan</Check>
+              {s.takeLoan && (
                 <div className="grid-2">
-                  <NumberField label="COE the price assumes" prefix="$" value={s.coeInPackage} onChange={(v) => set('coeInPackage', v)} hint="Ask the salesperson" />
-                  <NumberField label="Latest COE" prefix="$" value={s.coeLatest} onChange={(v) => set('coeLatest', v)} />
-                  <NumberField label="Bids included" value={s.bidsIncluded} onChange={(v) => set('bidsIncluded', v)} min={0} max={24} />
-                  <SelectField label="If COE goes higher, who pays?" value={s.topUpPaidBy} onChange={(v) => set('topUpPaidBy', v)}
-                    options={[{ value: 'buyer', label: 'I top up' }, { value: 'dealer', label: 'Dealer absorbs it' }]} />
+                  <NumberField label="Loan amount" prefix="$" value={s.loanAmount} onChange={(v) => set('loanAmount', v)} />
+                  <NumberField label="Flat rate" help="flat-rate" suffix="%" value={s.loanFlatRate} onChange={(v) => set('loanFlatRate', v)} />
+                  <NumberField label="Tenure" suffix="years" value={s.loanYears} onChange={(v) => set('loanYears', v)} min={1} max={10} />
+                  <NumberField label="Discount only if I take this loan" prefix="$" value={s.loanTiedDiscount} onChange={(v) => set('loanTiedDiscount', v)} />
                 </div>
               )}
-              <Check checked={s.depositRefundable} onChange={(v) => set('depositRefundable', v)}>
-                Deposit is refunded if COE isn't won or my loan isn't approved (in writing)
-              </Check>
-            </div>
-          </section>
+            </Tier>
 
-          <section>
-            <div className="rule-head"><h2>Loan</h2></div>
-            <Check checked={s.takeLoan} onChange={(v) => set('takeLoan', v)}>The deal includes the dealer's loan</Check>
-            {s.takeLoan && (
-              <div className="grid-2" style={{ marginTop: 12 }}>
-                <NumberField label="Loan amount" prefix="$" value={s.loanAmount} onChange={(v) => set('loanAmount', v)} />
-                <NumberField label="Flat rate" help="flat-rate" suffix="%" value={s.loanFlatRate} onChange={(v) => set('loanFlatRate', v)} />
-                <NumberField label="Tenure" suffix="years" value={s.loanYears} onChange={(v) => set('loanYears', v)} min={1} max={10} />
-                <NumberField label="Discount only if I take this loan" prefix="$" value={s.loanTiedDiscount} onChange={(v) => set('loanTiedDiscount', v)} />
-              </div>
-            )}
-          </section>
-
-          <section>
-            <div className="rule-head"><h2>Insurance</h2></div>
-            <Check checked={s.insuranceRequired} onChange={(v) => set('insuranceRequired', v)}>I must take the dealer's insurance</Check>
-            {s.insuranceRequired && (
-              <div className="grid-2" style={{ marginTop: 12 }}>
-                <NumberField label="Premium" prefix="$" suffix="/yr" value={s.insurancePremium} onChange={(v) => set('insurancePremium', v)} />
-                <NumberField label="Locked in for" suffix="years" value={s.insuranceYears} onChange={(v) => set('insuranceYears', v)} />
-                <NumberField label="Your own quote or estimate" prefix="$" suffix="/yr" value={s.insuranceEstimate} onChange={(v) => set('insuranceEstimate', v)} hint={<a href="#/calculator">Estimate one in the calculator</a>} />
-              </div>
-            )}
-          </section>
-
-          <section>
-            <div className="rule-head"><h2>Freebies</h2></div>
-            <p className="small muted">Tick only the ones you'd pay for yourself.</p>
-            <div className="stack">
-              {s.freebies.map((f, i) => (
-                <div key={i} className="row" style={{ alignItems: 'flex-end' }}>
-                  <input type="checkbox" aria-label={`I want ${f.name}`} checked={f.wanted} onChange={(e) => setFreebie(i, { wanted: e.target.checked })} style={{ width: 18, height: 18, marginBottom: 12, accentColor: 'var(--accent)' }} />
-                  <div className="input-wrap" style={{ flex: '2 1 140px' }}>
-                    <input aria-label="Item" value={f.name} onChange={(e) => setFreebie(i, { name: e.target.value })} />
-                  </div>
-                  <div style={{ flex: '1 1 100px' }}>
-                    <NumberField label="" prefix="$" value={f.statedValue} onChange={(v) => setFreebie(i, { statedValue: v })} />
-                  </div>
-                  <button className="btn btn-ghost btn-sm" aria-label={`Remove ${f.name}`} onClick={() => set('freebies', s.freebies.filter((_, j) => j !== i))} style={{ marginBottom: 6 }}>✕</button>
+            <Tier
+              label="Bundled insurance"
+              badge={s.insuranceRequired ? `${money(s.insurancePremium)}/yr` : 'not required'}
+              summary={s.insuranceRequired
+                ? `${money(s.insurancePremium)}/yr locked ${s.insuranceYears} yrs vs ~${money(s.insuranceEstimate)} own`
+                : 'You can shop for your own policy'}
+            >
+              <Check checked={s.insuranceRequired} onChange={(v) => set('insuranceRequired', v)}>I must take the dealer's insurance</Check>
+              {s.insuranceRequired && (
+                <div className="grid-2">
+                  <NumberField label="Premium" prefix="$" suffix="/yr" value={s.insurancePremium} onChange={(v) => set('insurancePremium', v)} />
+                  <NumberField label="Locked in for" suffix="years" value={s.insuranceYears} onChange={(v) => set('insuranceYears', v)} />
+                  <NumberField label="Your own quote or estimate" prefix="$" suffix="/yr" value={s.insuranceEstimate} onChange={(v) => set('insuranceEstimate', v)}
+                    hint={<a href="#/insurance">Estimate one here</a>} />
                 </div>
-              ))}
-              <div>
-                <button className="btn btn-sm" onClick={() => set('freebies', [...s.freebies, { name: 'New item', statedValue: 0, wanted: false }])}>+ Add item</button>
-              </div>
-            </div>
-          </section>
+              )}
+            </Tier>
 
-          <section>
-            <div className="rule-head"><h2>Trade-in</h2></div>
-            <Check checked={s.hasTradeIn} onChange={(v) => set('hasTradeIn', v)}>I'm trading in my current car</Check>
-            {s.hasTradeIn && (
-              <div className="grid-2" style={{ marginTop: 12 }}>
-                <NumberField label="Trade-in offer" prefix="$" value={s.tradeInOffer} onChange={(v) => set('tradeInOffer', v)} />
-                <NumberField label="Paper value" help="paper-value" prefix="$" value={s.tradeInPaperValue} onChange={(v) => set('tradeInPaperValue', v)} hint={<a href="#/trade-in">Work it out in the trade-in checker</a>} />
+            <Tier
+              label="Freebies"
+              badge={`${money(r.freebiesUseful)} of ${money(r.freebiesStated)}`}
+              summary={r.freebiesUseful === 0
+                ? 'None ticked — these are pure margin'
+                : s.freebies.filter((f) => f.wanted).map((f) => f.name).join(', ')}
+            >
+              <p className="small muted" style={{ marginTop: 0 }}>Tick only the ones you'd pay for yourself.</p>
+              <div className="stack">
+                {s.freebies.map((f, i) => (
+                  <div key={i} className="row" style={{ alignItems: 'flex-end' }}>
+                    <input type="checkbox" aria-label={`I want ${f.name}`} checked={f.wanted} onChange={(e) => setFreebie(i, { wanted: e.target.checked })} style={{ width: 18, height: 18, marginBottom: 12, accentColor: 'var(--accent)' }} />
+                    <div className="input-wrap" style={{ flex: '2 1 140px' }}>
+                      <input aria-label="Item" value={f.name} onChange={(e) => setFreebie(i, { name: e.target.value })} />
+                    </div>
+                    <div style={{ flex: '1 1 100px' }}>
+                      <NumberField label="" prefix="$" value={f.statedValue} onChange={(v) => setFreebie(i, { statedValue: v })} />
+                    </div>
+                    <button className="btn btn-ghost btn-sm" aria-label={`Remove ${f.name}`} onClick={() => set('freebies', s.freebies.filter((_, j) => j !== i))} style={{ marginBottom: 6 }}>✕</button>
+                  </div>
+                ))}
+                <div>
+                  <button className="btn btn-sm" onClick={() => set('freebies', [...s.freebies, { name: 'New item', statedValue: 0, wanted: false }])}>+ Add item</button>
+                </div>
               </div>
-            )}
-          </section>
+            </Tier>
+
+            <Tier
+              label="Trade-in"
+              badge={s.hasTradeIn ? money(s.tradeInOffer) : 'none'}
+              summary={s.hasTradeIn
+                ? `${money(s.tradeInOffer)} against a ${money(s.tradeInPaperValue)} floor`
+                : 'No trade-in in this deal'}
+            >
+              <Check checked={s.hasTradeIn} onChange={(v) => set('hasTradeIn', v)}>I'm trading in my current car</Check>
+              {s.hasTradeIn && (
+                <div className="grid-2">
+                  <NumberField label="Trade-in offer" prefix="$" value={s.tradeInOffer} onChange={(v) => set('tradeInOffer', v)} />
+                  <NumberField label="Paper value" help="paper-value" prefix="$" value={s.tradeInPaperValue} onChange={(v) => set('tradeInPaperValue', v)}
+                    hint={<a href="#/trade-in">Work it out in the trade-in checker</a>} />
+                </div>
+              )}
+            </Tier>
+          </div>
         </div>
 
         <aside className="stack sticky">
           <section>
-            <h2>What this deal really costs</h2>
-            <div className="figure-xl">{money(r.totalOutlay)}</div>
-            <p className="muted small">Price + fees + loan interest + required insurance{s.hasTradeIn ? ' − trade-in' : ''}.</p>
+            <div className="rule-head"><h2>What this deal costs</h2></div>
+            <p className="muted small" style={{ marginTop: 0 }}>
+              Price + fees + loan interest + required insurance{s.hasTradeIn ? ' − trade-in' : ''}.
+            </p>
             <div className="stats">
               <Stat label="Price incl. fees" value={money(r.allInPrice)} />
               {s.takeLoan && <Stat label="Loan interest" value={money(r.interest)} sub={`${pct(r.eir, 2)} real rate`} />}

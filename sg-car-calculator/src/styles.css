@@ -491,7 +491,80 @@ input::placeholder { color: var(--muted); }
 .summary-bar .value { font-family: var(--font-mono); font-weight: 500; font-size: 1rem; font-variant-numeric: tabular-nums; }
 @media (min-width: 900px) { .summary-bar { display: none; } }
 
+/* ---------- Tier: collapsible detail that still states its assumption ---------- */
+.tiers { border-top: 1px solid var(--ink); }
+.tier { border-bottom: 1px solid var(--rule-soft); }
+.tier > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  padding: 14px 0;
+  cursor: pointer;
+  list-style: none;
+  color: var(--ink);
+}
+.tier > summary::-webkit-details-marker { display: none; }
+.tier > summary:hover .tier-label { color: var(--accent-ink); }
+.tier-label { font-size: 0.9375rem; font-weight: 600; }
+.tier-badge {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.05em;
+  color: var(--ink-2);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+/* The summary line states the current assumption, so collapsing a tier hides
+   controls but never the values behind the headline number. */
+.tier-summary {
+  flex: 1 1 16rem;
+  min-width: 0;
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.tier-cue {
+  flex: none;
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.tier-cue::after { content: 'change'; }
+.tier[open] .tier-cue::after { content: 'close'; }
+.tier-body { padding: 20px 0 4px; }
+.tier-body > * + * { margin-top: 14px; }
+.tier-body > .rule-head:first-child { margin-top: 0; }
+
+/* Below this width the label, badge and summary each take a line of their own
+   rather than fighting for horizontal space. */
+@media (max-width: 620px) {
+  .tier-summary { flex-basis: 100%; text-align: left; }
+}
+
+/* A short, prominent answer before the inputs. */
+.answer {
+  background: var(--surface);
+  padding: 20px 24px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 24px;
+}
+.answer .figure-xl { margin-right: auto; }
+
 input[type='range'] { width: 100%; accent-color: var(--accent); }
 details summary { cursor: pointer; font-weight: 600; font-size: 0.9375rem; }
 details[open] summary { margin-bottom: 12px; }
+
+/* The tier styles are defined above and are self-contained: their own flex row,
+   their own cue. This generic rule is the fallback for plain <details> elsewhere
+   and must not add its own marker on top of the tier's. */
+details:not(.tier) > summary { list-style: revert; }
+details:not(.tier)[open] > summary { margin-bottom: 12px; }
 hr { border: 0; border-top: 1px solid var(--rule); margin: 20px 0; }

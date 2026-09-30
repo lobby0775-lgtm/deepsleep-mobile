@@ -4,8 +4,8 @@ import { priceBreakdown, roadTaxPerYear } from '../calc/tax';
 import { earlySettlement, flatRateLoan, maxLoan } from '../calc/loan';
 import { newCarDepreciation } from '../calc/depreciation';
 import { estimateInsurance, insuranceRatePct, runningCostsPerYear } from '../calc/running';
-import { money, pct, fmtMoney } from '../calc/format';
-import { Check, FlagList, NumberField, Segmented, SelectField, Stat } from '../components/Fields';
+import { money, pct, fmtMoney, num } from '../calc/format';
+import { Check, FlagList, NumberField, Segmented, SelectField, Stat, Tier } from '../components/Fields';
 import { Breakdown } from '../components/Breakdown';
 import { StackedBar } from '../components/Charts';
 import { PRESETS } from '../presets';
@@ -166,140 +166,185 @@ export function Calculator() {
 
       <div className="cols">
         <div className="stack">
-          <section>
-            <div className="rule-head"><h2><span className="step">01</span>The car</h2></div>
-            <div className="grid-2">
-              <NumberField label="Dealer's price" prefix="$" value={s.dealerPrice} onChange={(v) => set('dealerPrice', v)} hint="Including COE, as quoted" />
-              <NumberField label="OMV" help="omv" prefix="$" value={s.omv} onChange={(v) => set('omv', v)} hint="On the dealer's price list or LTA's records" />
-              <SelectField label="COE category" help="coe" value={s.category}
-                onChange={(v) => { set('category', v); set('coe', COE_LATEST[v]); }}
-                options={[{ value: 'A', label: 'Cat A (≤1,600cc, ≤97kW)' }, { value: 'B', label: 'Cat B (bigger engines)' }]} />
-              <NumberField label="COE premium" prefix="$" value={s.coe} onChange={(v) => set('coe', v)} hint={`Latest: ${money(COE_LATEST[s.category])} (${COE_LATEST_LABEL})`} />
-              <SelectField label="Fuel" value={s.fuel}
-                onChange={(v) => { set('fuel', v); set('litresPer100km', RUNNING_DEFAULTS.litresPer100km[v]); }}
-                options={[{ value: 'petrol', label: 'Petrol' }, { value: 'hybrid', label: 'Hybrid' }, { value: 'ev', label: 'Electric' }]} />
-              <SelectField label="VES band" help="ves" value={s.vesBand} onChange={(v) => set('vesBand', v)}
-                options={[
-                  { value: 'A', label: 'A: rebate (cleanest, EVs)' },
-                  { value: 'B', label: 'B: neutral' },
-                  { value: 'C1', label: 'C1: surcharge' },
-                  { value: 'C2', label: 'C2: higher surcharge' },
-                  { value: 'C3', label: 'C3: highest surcharge' },
-                ]} />
-              {s.fuel === 'ev' ? (
-                <NumberField label="Motor power" suffix="kW" value={s.powerKW} onChange={(v) => set('powerKW', v)} hint="Sets road tax" />
-              ) : (
-                <NumberField label="Engine capacity" suffix="cc" value={s.engineCc} onChange={(v) => set('engineCc', v)} hint="Sets road tax" />
-              )}
-              <SelectField label="Registration year" value={s.regYear} onChange={(v) => set('regYear', v)}
-                options={[{ value: 2026, label: '2026' }, { value: 2027, label: '2027' }]} hint="VES and EV incentives change yearly" />
+          {/*
+            The answer first, then three fields, then everything else behind
+            tiers. The tiers carry a summary line showing what is currently
+            assumed, so collapsing them hides controls but never the
+            assumptions behind the number.
+          */}
+          <div className="answer">
+            <div className="figure-xl">{money(r.perMonth)}<span className="figure-unit"> / month</span></div>
+            <div>
+              <div className="label small muted">Over {s.keepYears} years</div>
+              <div className="small num">{money(r.total)} all in</div>
             </div>
-          </section>
+          </div>
 
           <section>
-            <div className="rule-head"><h2><span className="step">02</span>Financing</h2></div>
-            <Check checked={s.takeLoan} onChange={(v) => set('takeLoan', v)}>I'm taking a car loan</Check>
-            {s.takeLoan && (
-              <div className="stack" style={{ marginTop: 12 }}>
-                <Segmented label="How do you want to set the loan?" value={s.loanInput}
-                  onChange={(v) => setAll((p) => ({ ...p, loanInput: v, loanAmountOverride: v === 'amount' ? Math.round((p.dealerPrice * p.loanPct) / 100) : 0 }))}
-                  options={[{ value: 'pct', label: 'By percentage' }, { value: 'amount', label: 'By amount' }]} />
-                {s.loanInput === 'pct' ? (
-                  <div className="field">
-                    <label className="field-label" htmlFor="loanpct">
-                      Loan: {pct(r.loanPct, 0)} of price ({money(r.loanAmount)}) <a className="help" href="#/guides/loan">?</a>
-                    </label>
-                    <input id="loanpct" type="range" min={0} max={r.cap.ltv * 100} step={1} value={r.loanPct} onChange={(e) => set('loanPct', +e.target.value)} />
-                    <span className="field-hint">
-                      MAS caps loans at {pct(r.cap.ltv * 100, 0)} of the price for cars with OMV {s.omv <= 20_000 ? 'up to' : 'above'} $20,000.
-                      You need at least {money(s.dealerPrice - r.cap.amount)} in cash.
-                    </span>
-                  </div>
+            <div className="grid-2">
+              <NumberField label="Dealer's price" prefix="$" value={s.dealerPrice} onChange={(v) => set('dealerPrice', v)}
+                hint="The on-the-road price, COE included" />
+              <NumberField label="Keep it for" suffix="years" value={s.keepYears} onChange={(v) => set('keepYears', v)} min={1} max={10} />
+            </div>
+            <div className="field" style={{ marginTop: 16 }}>
+              <label className="field-label" htmlFor="keep-range">Ownership period</label>
+              <input id="keep-range" type="range" min={1} max={10} value={s.keepYears} onChange={(e) => set('keepYears', +e.target.value)} />
+            </div>
+            <p className="small muted" style={{ marginTop: 12, marginBottom: 0, maxWidth: '54ch' }}>
+              Those two figures are enough for a solid answer. Everything else below is already set to a sensible Singapore
+              default and only changes the result slightly — open a section if yours differs.
+            </p>
+          </section>
+
+          <div className="tiers">
+            <Tier
+              label="The car"
+              badge={s.fuel === 'ev' ? 'EV' : s.category}
+              summary={`OMV ${money(s.omv)} · COE ${money(s.coe)} · ${s.vesBand} · ${s.regYear}`}
+            >
+              <div className="grid-2">
+                <NumberField label="OMV" help="omv" prefix="$" value={s.omv} onChange={(v) => set('omv', v)} hint="On the price list or LTA's records" />
+                <SelectField label="COE category" help="coe" value={s.category}
+                  onChange={(v) => { set('category', v); set('coe', COE_LATEST[v]); }}
+                  options={[{ value: 'A', label: 'Cat A (≤1,600cc, ≤97kW)' }, { value: 'B', label: 'Cat B (bigger engines)' }]} />
+                <NumberField label="COE premium" prefix="$" value={s.coe} onChange={(v) => set('coe', v)}
+                  hint={`Latest: ${money(COE_LATEST[s.category])} (${COE_LATEST_LABEL})`} />
+                <SelectField label="VES band" help="ves" value={s.vesBand} onChange={(v) => set('vesBand', v)}
+                  options={[
+                    { value: 'A', label: 'A: rebate (cleanest, EVs)' },
+                    { value: 'B', label: 'B: neutral' },
+                    { value: 'C1', label: 'C1: surcharge' },
+                    { value: 'C2', label: 'C2: higher surcharge' },
+                    { value: 'C3', label: 'C3: highest surcharge' },
+                  ]} />
+                <SelectField label="Fuel" value={s.fuel}
+                  onChange={(v) => { set('fuel', v); set('litresPer100km', RUNNING_DEFAULTS.litresPer100km[v]); }}
+                  options={[{ value: 'petrol', label: 'Petrol' }, { value: 'hybrid', label: 'Hybrid' }, { value: 'ev', label: 'Electric' }]} />
+                {s.fuel === 'ev' ? (
+                  <NumberField label="Motor power" suffix="kW" value={s.powerKW} onChange={(v) => set('powerKW', v)} hint="Sets road tax" />
                 ) : (
-                  <div className="grid-2">
-                    <NumberField label="Loan amount" prefix="$" value={s.loanAmountOverride} onChange={(v) => set('loanAmountOverride', v)}
-                      hint={`${pct(r.loanPct, 0)} of the price. What's on your approval letter.`} />
-                    <div className="field">
-                      <label className="field-label">Downpayment</label>
-                      <div className="input-wrap">
-                        <span className="affix">$</span>
-                        <input readOnly value={fmtMoney(s.dealerPrice - r.loanAmount)} aria-label="Downpayment" />
-                      </div>
-                      <span className="field-hint">Cash you hand over at signing.</span>
-                    </div>
-                  </div>
+                  <NumberField label="Engine capacity" suffix="cc" value={s.engineCc} onChange={(v) => set('engineCc', v)} hint="Sets road tax" />
                 )}
-                {r.loanOverCap && (
-                  <FlagList items={[{
-                    severity: 'warn',
-                    title: `${money(s.loanAmountOverride - r.cap.amount)} over the legal limit`,
-                    detail: `MAS caps car loans at ${pct(r.cap.ltv * 100, 0)} of the price (${money(r.cap.amount)}) for this OMV. A bigger "loan" is usually a second, pricier personal loan bundled into the deal.`,
-                  }]} />
-                )}
-                <div className="grid-2">
-                  <NumberField label="Flat interest rate" help="flat-rate" suffix="% p.a." value={s.flatRate} onChange={(v) => set('flatRate', v)} min={0} max={20} />
-                  <SelectField label="Loan tenure" value={r.loanYears} onChange={(v) => set('loanYears', v)}
-                    options={[1, 2, 3, 4, 5, 6, 7].map((y) => ({ value: y, label: `${y} year${y > 1 ? 's' : ''}` }))} hint="7 years is the legal maximum" />
-                </div>
-                <div className="stats">
-                  <Stat label="Monthly instalment" value={money(r.loan.monthly)} />
-                  <Stat label="Total interest" value={money(r.loan.totalInterest)} />
-                  <Stat label="Real rate (EIR)" value={pct(r.loan.eir, 2)} sub={`vs ${pct(s.flatRate, 2)} flat quoted`} />
-                </div>
+                <SelectField label="Registration year" value={s.regYear} onChange={(v) => set('regYear', v)}
+                  options={[{ value: 2026, label: '2026' }, { value: 2027, label: '2027' }]} hint="VES and EV incentives change yearly" />
               </div>
-            )}
-          </section>
+            </Tier>
 
-          <section>
-            <div className="rule-head"><h2><span className="step">03</span>Insurance</h2></div>
-            <div className="grid-2">
-              <SelectField label="No-Claim Discount" help="ncd" value={s.ncdPct} onChange={(v) => set('ncdPct', v)}
-                options={[0, 10, 20, 30, 40, 50].map((n) => ({ value: n, label: `${n}%` }))} />
-              <NumberField label="Main driver's age" value={s.driverAge} onChange={(v) => set('driverAge', v)} min={18} max={99} />
-              <NumberField label="Years since licence" value={s.yearsLicensed} onChange={(v) => set('yearsLicensed', v)} min={0} max={80} />
-              <NumberField label="Your quote (optional)" prefix="$" suffix="/yr" value={s.insuranceOverride} onChange={(v) => set('insuranceOverride', v)}
-                hint={<>
-                Estimate: {money(r.insuranceEstimate)}/yr ({pct(r.insuranceRate, 1)} of OMV, before NCD). Enter a real quote if you
-                have one. <a href="#/insurance">What the premium hides &rarr;</a>
-              </>} />
-            </div>
-          </section>
-
-          <section>
-            <div className="rule-head"><h2><span className="step">04</span>Running costs</h2></div>
-            <div className="grid-2">
-              <NumberField label="Driving per year" suffix="km" value={s.kmPerYear} onChange={(v) => set('kmPerYear', v)} />
-              {s.fuel === 'ev' ? (
-                <>
-                  <NumberField label="Consumption" suffix="kWh/100km" value={s.kWhPer100km} onChange={(v) => set('kWhPer100km', v)} />
-                  <NumberField label="Charging price" prefix="$" suffix="/kWh" value={s.electricityPerKWh} onChange={(v) => set('electricityPerKWh', v)} hint="Public chargers ~$0.55–0.70; home ~$0.33" />
-                </>
-              ) : (
-                <>
-                  <NumberField label="Fuel use" suffix="L/100km" value={s.litresPer100km} onChange={(v) => set('litresPer100km', v)} />
-                  <NumberField label="Petrol price" prefix="$" suffix="/L" value={s.petrolPerLitre} onChange={(v) => set('petrolPerLitre', v)} hint="After typical card discounts" />
-                </>
+            <Tier
+              label="Financing"
+              badge={s.takeLoan ? `${pct(r.loanPct, 0)} loan` : 'no loan'}
+              summary={s.takeLoan
+                ? `${money(r.loan.monthly)}/mo · ${s.loanYears} yrs at ${pct(s.flatRate, 2)} flat (${pct(r.loan.eir, 2)} real)`
+                : 'Paying in full'}
+            >
+              <Check checked={s.takeLoan} onChange={(v) => set('takeLoan', v)}>I'm taking a car loan</Check>
+              {s.takeLoan && (
+                <div className="stack">
+                  <Segmented label="How do you want to set the loan?" value={s.loanInput}
+                    onChange={(v) => setAll((p) => ({ ...p, loanInput: v, loanAmountOverride: v === 'amount' ? Math.round((p.dealerPrice * p.loanPct) / 100) : 0 }))}
+                    options={[{ value: 'pct', label: 'By percentage' }, { value: 'amount', label: 'By amount' }]} />
+                  {s.loanInput === 'pct' ? (
+                    <div className="field">
+                      <label className="field-label" htmlFor="loanpct">
+                        Loan: {pct(r.loanPct, 0)} of price ({money(r.loanAmount)}) <a className="help" href="#/guides/loan">?</a>
+                      </label>
+                      <input id="loanpct" type="range" min={0} max={r.cap.ltv * 100} step={1} value={r.loanPct} onChange={(e) => set('loanPct', +e.target.value)} />
+                      <span className="field-hint">
+                        MAS caps loans at {pct(r.cap.ltv * 100, 0)} of the price for cars with OMV {s.omv <= 20_000 ? 'up to' : 'above'} $20,000.
+                        You need at least {money(s.dealerPrice - r.cap.amount)} in cash.
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="grid-2">
+                      <NumberField label="Loan amount" prefix="$" value={s.loanAmountOverride} onChange={(v) => set('loanAmountOverride', v)}
+                        hint={`${pct(r.loanPct, 0)} of the price. What's on your approval letter.`} />
+                      <div className="field">
+                        <label className="field-label">Downpayment</label>
+                        <div className="input-wrap">
+                          <span className="affix">$</span>
+                          <input readOnly value={fmtMoney(s.dealerPrice - r.loanAmount)} aria-label="Downpayment" />
+                        </div>
+                        <span className="field-hint">Cash you hand over at signing.</span>
+                      </div>
+                    </div>
+                  )}
+                  {r.loanOverCap && (
+                    <FlagList items={[{
+                      severity: 'warn',
+                      title: `${money(s.loanAmountOverride - r.cap.amount)} over the legal limit`,
+                      detail: `MAS caps car loans at ${pct(r.cap.ltv * 100, 0)} of the price (${money(r.cap.amount)}) for this OMV. A bigger "loan" is usually a second, pricier personal loan bundled into the deal.`,
+                    }]} />
+                  )}
+                  <div className="grid-2">
+                    <NumberField label="Flat interest rate" help="flat-rate" suffix="% p.a." value={s.flatRate} onChange={(v) => set('flatRate', v)} min={0} max={20} />
+                    <SelectField label="Loan tenure" value={r.loanYears} onChange={(v) => set('loanYears', v)}
+                      options={[1, 2, 3, 4, 5, 6, 7].map((y) => ({ value: y, label: `${y} year${y > 1 ? 's' : ''}` }))} hint="7 years is the legal maximum" />
+                  </div>
+                  <div className="stats">
+                    <Stat label="Monthly instalment" value={money(r.loan.monthly)} />
+                    <Stat label="Total interest" value={money(r.loan.totalInterest)} />
+                    <Stat label="Real rate (EIR)" value={pct(r.loan.eir, 2)} sub={`vs ${pct(s.flatRate, 2)} flat quoted`} />
+                  </div>
+                </div>
               )}
-              <NumberField label="Parking" prefix="$" suffix="/month" value={s.parkingPerMonth} onChange={(v) => set('parkingPerMonth', v)} hint="HDB season parking is $80–$110" />
-              <NumberField label="ERP" prefix="$" suffix="/month" value={s.erpPerMonth} onChange={(v) => set('erpPerMonth', v)} />
-              <NumberField label="Servicing & repairs" prefix="$" suffix="/yr" value={s.servicingPerYear} onChange={(v) => set('servicingPerYear', v)} />
-            </div>
-            <p className="small muted" style={{ marginTop: 12, marginBottom: 0 }}>Road tax works out to {money(r.roadTax)} a year for this car.</p>
-          </section>
+            </Tier>
+
+            <Tier
+              label="Insurance"
+              badge={`${s.ncdPct}% NCD`}
+              summary={s.insuranceOverride > 0
+                ? `Your quote ${money(s.insuranceOverride)}/yr`
+                : `Est. ${money(r.insuranceEstimate)}/yr at ${pct(r.insuranceRate, 1)} of OMV`}
+            >
+              <div className="grid-2">
+                <NumberField label="Your actual premium" prefix="$" suffix="/yr" value={s.insuranceOverride} onChange={(v) => set('insuranceOverride', v)}
+                  hint={`Leave at zero to use the estimate of ${money(r.insuranceEstimate)}.`} />
+                <SelectField label="No-Claim Discount" help="ncd" value={s.ncdPct} onChange={(v) => set('ncdPct', v)}
+                  options={[0, 10, 20, 30, 40, 50].map((n) => ({ value: n, label: `${n}%` }))} />
+                <NumberField label="Main driver's age" value={s.driverAge} onChange={(v) => set('driverAge', v)} min={18} max={99} />
+                <NumberField label="Years since licence" value={s.yearsLicensed} onChange={(v) => set('yearsLicensed', v)} min={0} max={80} />
+              </div>
+              <p className="small muted" style={{ marginBottom: 0 }}>
+                <a href="#/insurance">What the premium hides &rarr;</a>
+              </p>
+            </Tier>
+
+            <Tier
+              label="Running costs"
+              badge={`${num(s.kmPerYear)} km/yr`}
+              summary={`${money(r.running.energy)} fuel · ${money(r.running.parking + r.running.erp)} park/ERP · ${money(r.roadTax)} tax`}
+            >
+              <div className="grid-2">
+                <NumberField label="Driving per year" suffix="km" value={s.kmPerYear} onChange={(v) => set('kmPerYear', v)} />
+                {s.fuel === 'ev' ? (
+                  <>
+                    <NumberField label="Consumption" suffix="kWh/100km" value={s.kWhPer100km} onChange={(v) => set('kWhPer100km', v)} />
+                    <NumberField label="Charging price" prefix="$" suffix="/kWh" value={s.electricityPerKWh} onChange={(v) => set('electricityPerKWh', v)} hint="Public chargers ~$0.55–0.70; home ~$0.33" />
+                  </>
+                ) : (
+                  <>
+                    <NumberField label="Fuel use" suffix="L/100km" value={s.litresPer100km} onChange={(v) => set('litresPer100km', v)} />
+                    <NumberField label="Petrol price" prefix="$" suffix="/L" value={s.petrolPerLitre} onChange={(v) => set('petrolPerLitre', v)} hint="After typical card discounts" />
+                  </>
+                )}
+                <NumberField label="Parking" prefix="$" suffix="/month" value={s.parkingPerMonth} onChange={(v) => set('parkingPerMonth', v)} hint="HDB season parking is $80–$110" />
+                <NumberField label="ERP" prefix="$" suffix="/month" value={s.erpPerMonth} onChange={(v) => set('erpPerMonth', v)} />
+                <NumberField label="Servicing & repairs" prefix="$" suffix="/yr" value={s.servicingPerYear} onChange={(v) => set('servicingPerYear', v)} />
+              </div>
+              <p className="small muted" style={{ marginBottom: 0 }}>Road tax works out to {money(r.roadTax)} a year for this car.</p>
+            </Tier>
+          </div>
         </div>
 
         <aside className="stack sticky">
           <section>
             <div className="rule-head">
-              <h2>What it really costs</h2>
+              <h2>Where it goes</h2>
               <button className="btn btn-ghost btn-sm" onClick={share}>{copied ? 'Copied' : 'Copy link'}</button>
             </div>
-            <div className="field" style={{ marginBottom: 12 }}>
-              <label className="field-label" htmlFor="keep">If you keep the car for {s.keepYears} year{s.keepYears > 1 ? 's' : ''}</label>
-              <input id="keep" type="range" min={1} max={10} value={s.keepYears} onChange={(e) => set('keepYears', +e.target.value)} />
-            </div>
-            <div className="figure-xl">{money(r.perMonth)}<span className="figure-unit"> / month</span></div>
-            <p className="muted small">{money(r.total)} in total over {s.keepYears} years, all costs included.</p>
+            <p className="muted small" style={{ marginTop: 0 }}>
+              {money(r.total)} in total over {s.keepYears} years, all costs included.
+            </p>
             <div className="stats">
               <Stat label="Cash upfront" value={money(r.downpayment)} sub="Downpayment" />
               <Stat label="Monthly outgoings" value={money(r.monthlyOutgoing)} sub="Instalment + running costs" />

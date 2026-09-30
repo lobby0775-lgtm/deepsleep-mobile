@@ -151,6 +151,31 @@ export function Stat(props: { label: ReactNode; value: ReactNode; sub?: ReactNod
 }
 
 /**
+ * A section of optional detail, collapsed by default.
+ *
+ * The point is that a collapsed section still states what is currently
+ * assumed, so nothing is hidden from the reader — you can see that the loan is
+ * 60% over seven years without opening the section to find out. A plain
+ * accordion that only says "Financing" would hide the assumptions; this shows
+ * them.
+ */
+export function Tier({ label, summary, children, badge }: { label: string; summary: ReactNode; children: ReactNode; badge?: ReactNode }) {
+  return (
+    <details className="tier">
+      <summary>
+        <span className="tier-label">{label}</span>
+        {badge && <span className="tier-badge">{badge}</span>}
+        <span className="tier-summary">{summary}</span>
+        {/* Empty on purpose: the word comes from CSS ::after, which swaps
+            between "change" and "close" on the open state. */}
+        <span className="tier-cue" aria-hidden="true" />
+      </summary>
+      <div className="tier-body">{children}</div>
+    </details>
+  );
+}
+
+/**
  * A finding worth surfacing: severity, one-line headline, one paragraph of
  * why it matters. Rendered as a left rule rather than a coloured bubble, so a
  * page full of them reads as a list of findings rather than a wall of alerts.

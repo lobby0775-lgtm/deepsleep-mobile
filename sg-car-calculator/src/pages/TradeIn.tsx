@@ -1,7 +1,7 @@
 import { PARF_REGIMES } from '../calc/defaults';
 import { addYears, monthsBetween, paperValue, parfRegimeFor } from '../calc/rebates';
 import { money } from '../calc/format';
-import { Check, DateField, FlagList, NumberField, Segmented, Stat } from '../components/Fields';
+import { Check, DateField, FlagList, NumberField, Segmented, Tier } from '../components/Fields';
 import { usePersistentState, todayIso } from '../state';
 
 const DEFAULTS = {
@@ -40,38 +40,56 @@ export function TradeIn() {
       </div>
 
       <div className="cols results-first">
-        <section>
-          <h2>Your current car</h2>
-          <p className="small muted">You'll find these on the car's log card or on OneMotoring under "Vehicle Details".</p>
-          <div className="grid-2">
-            <DateField label="Registration date" value={s.regDate} onChange={(v) => setAll((p) => ({ ...p, regDate: v, coeExpiry: p.coeRenewed ? p.coeExpiry : addYears(v, 10) }))} />
-            <DateField label="COE expiry" value={s.coeExpiry} onChange={(v) => set('coeExpiry', v)} />
-            <NumberField label="ARF paid" help="arf" prefix="$" value={s.arfPaid} onChange={(v) => set('arfPaid', v)} />
-            <NumberField label={s.coeRenewed ? 'Renewal PQP paid' : 'COE paid'} help="coe" prefix="$" value={s.coePaid} onChange={(v) => set('coePaid', v)} />
-            <DateField label="Handover date" value={s.handover} onChange={(v) => set('handover', v)} hint="When the dealer takes the car" />
+        <div className="stack">
+          <div className="answer">
+            <div className="figure-xl">{money(pv.total)}</div>
+            <div>
+              <div className="label small muted">Paper value, your guaranteed floor</div>
+              <div className="small num">Offer {money(s.offer)} · {premium >= 0 ? `${money(premium)} above` : `${money(-premium)} below`}</div>
+            </div>
           </div>
-          <div className="stack" style={{ marginTop: 16 }}>
-            <Check checked={s.coeRenewed} onChange={(v) => set('coeRenewed', v)}>The COE has been renewed (no PARF)</Check>
-            {s.coeRenewed && (
-              <Segmented label="Renewal length" value={s.renewalYears} onChange={(v) => set('renewalYears', v)} options={[{ value: 5, label: '5-year renewal' }, { value: 10, label: '10-year renewal' }]} />
-            )}
+
+          <section>
+            <div className="grid-2">
+              <NumberField label="Dealer's trade-in offer" prefix="$" value={s.offer} onChange={(v) => set('offer', v)} />
+              <NumberField label="Loan still owed" prefix="$" value={s.outstandingLoan} onChange={(v) => set('outstandingLoan', v)}
+                hint="Ask your bank for the settlement figure" />
+            </div>
+            <p className="small muted" style={{ marginTop: 12, marginBottom: 0, maxWidth: '54ch' }}>
+              Enter the offer and what's still owed. The paper value underneath is worked out from your car's own COE, PARF and
+              ARF — open the section below if you want to check them.
+            </p>
+          </section>
+
+          <div className="tiers">
+            <Tier
+              label="Your car's COE and PARF"
+              badge={s.coeRenewed ? 'COE renewed' : 'original COE'}
+              summary={s.coeRenewed
+                ? `Renewed to ${s.coeExpiry} at ${money(s.coePaid)} · ARF ${money(s.arfPaid)}`
+                : `Paid ${money(s.coePaid)}, expires ${s.coeExpiry} · ARF ${money(s.arfPaid)}`}
+            >
+              <p className="small muted" style={{ marginTop: 0 }}>On the log card, or OneMotoring under "Vehicle Details".</p>
+              <div className="grid-2">
+                <DateField label="Registration date" value={s.regDate} onChange={(v) => setAll((p) => ({ ...p, regDate: v, coeExpiry: p.coeRenewed ? p.coeExpiry : addYears(v, 10) }))} />
+                <DateField label="COE expiry" value={s.coeExpiry} onChange={(v) => set('coeExpiry', v)} />
+                <NumberField label="ARF paid" help="arf" prefix="$" value={s.arfPaid} onChange={(v) => set('arfPaid', v)} />
+                <NumberField label={s.coeRenewed ? 'Renewal PQP paid' : 'COE paid'} help="coe" prefix="$" value={s.coePaid} onChange={(v) => set('coePaid', v)} />
+                <DateField label="Handover date" value={s.handover} onChange={(v) => set('handover', v)} hint="When the dealer takes the car" />
+              </div>
+              <div className="stack">
+                <Check checked={s.coeRenewed} onChange={(v) => set('coeRenewed', v)}>The COE has been renewed (no PARF)</Check>
+                {s.coeRenewed && (
+                  <Segmented label="Renewal length" value={s.renewalYears} onChange={(v) => set('renewalYears', v)} options={[{ value: 5, label: '5-year renewal' }, { value: 10, label: '10-year renewal' }]} />
+                )}
+              </div>
+            </Tier>
           </div>
-          <hr />
-          <div className="rule-head"><h2>The offer</h2></div>
-          <div className="grid-2">
-            <NumberField label="Dealer's trade-in offer" prefix="$" value={s.offer} onChange={(v) => set('offer', v)} />
-            <NumberField label="Loan still owed" prefix="$" value={s.outstandingLoan} onChange={(v) => set('outstandingLoan', v)} hint="Ask your bank for the settlement amount" />
-          </div>
-        </section>
+        </div>
 
         <aside className="stack sticky">
           <section>
             <div className="rule-head"><h2>Is the offer fair?</h2></div>
-            <div className="stats">
-              <Stat label="Paper value" value={money(pv.total)} sub="Guaranteed floor" />
-              <Stat label="Offer" value={money(s.offer)} />
-              <Stat label={premium >= 0 ? 'Above paper value' : 'Below paper value'} value={money(Math.abs(premium))} />
-            </div>
             <div className="hbar" style={{ margin: '16px 0 8px' }} aria-hidden="true">
               {[
                 { label: 'Paper value', v: pv.total, floor: true },

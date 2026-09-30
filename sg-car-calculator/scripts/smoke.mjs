@@ -25,11 +25,21 @@ page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
 await page.goto(`${URL}/#/calculator`, { waitUntil: 'networkidle' });
 check('calculator loads', (await page.locator('h1').innerText()) === 'True cost calculator');
 
-/* --- insurance estimate is driven by OMV, not the retail price --- */
-const insHint = await page.locator('.field-hint', { hasText: 'of OMV' }).first().innerText();
-check('insurance shows an OMV rate', /% of OMV/.test(insHint), insHint.trim());
+/* --- detail is collapsed by default, but the tier summary still states the
+       current assumption, so the OMV rate is readable without opening it --- */
+const tierText = await page.locator('details.tier', { hasText: 'Insurance' }).first().innerText();
+check('insurance tier states its OMV rate', /% of OMV/.test(tierText), tierText.replace(/\n/g, ' | ').trim());
+
+/* --- and opening it exposes the controls --- */
+await page.locator('details.tier', { hasText: 'Insurance' }).first().click();
+await page.waitForTimeout(200);
+const insPrem = await page.getByLabel(/Your actual premium/).inputValue();
+const insHint = await page.locator('.field-hint', { hasText: /estimate of/ }).first().innerText();
+check('insurance override accepts a real quote', insPrem === '0', `default ${insPrem} — ${insHint.trim()}`);
 
 /* --- loan amount field --- */
+await page.locator('details.tier', { hasText: 'Financing' }).first().click();
+await page.waitForTimeout(200);
 await page.getByRole('button', { name: 'By amount' }).click();
 await page.waitForTimeout(200);
 const loan = page.getByLabel(/Loan amount/);

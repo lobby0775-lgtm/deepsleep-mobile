@@ -1,7 +1,7 @@
 import { breakdownOfExcess, costOfClaim, grossPremium, premiumAtNcd } from '../calc/running';
 import { INSURANCE_OMV_BANDS } from '../calc/defaults';
 import { money, pct } from '../calc/format';
-import { Check, FlagList, NumberField, SelectField, Stat } from '../components/Fields';
+import { Check, FlagList, NumberField, SelectField, Stat, Tier } from '../components/Fields';
 import { StackedBar } from '../components/Charts';
 import { usePersistentState } from '../state';
 
@@ -128,8 +128,12 @@ export function Insurance() {
             </div>
           </section>
 
-          <section>
-            <div className="rule-head"><h2><span className="step">02</span>Your excess</h2></div>
+          <div className="tiers">
+          <Tier
+            label="Your excess"
+            badge={money(s.excess)}
+            summary={`Damage ${money(s.excess)} · theft ${money(ex.theftExcess)} at ${s.theftPct}% of ${money(s.omv)}`}
+          >
             <div className="grid-2">
               <NumberField label="Car's value (OMV)" prefix="$" value={s.omv} onChange={(v) => set('omv', v)}
                 hint="Theft and total loss are a share of this" />
@@ -148,10 +152,13 @@ export function Insurance() {
               {money(ex.worstCaseExcess)}. Check the theft excess on your policy — it is usually a percentage of the car's
               value, and it is rarely the number on the front page.
             </p>
-          </section>
+          </Tier>
 
-          <section>
-            <div className="rule-head"><h2><span className="step">03</span>What a claim costs</h2></div>
+          <Tier
+            label="What a claim costs"
+            badge={claim.worthClaiming ? 'worth claiming' : 'pay it yourself'}
+            summary={`${money(claim.claimCost)} to claim vs ${money(claim.selfPayCost)} to self-pay`}
+          >
             <div className="grid-2">
               <NumberField label="Repair bill" prefix="$" value={s.damage} onChange={(v) => set('damage', v)}
                 hint="The damage, not the excess" />
@@ -177,7 +184,8 @@ export function Insurance() {
                 </tr>
               </tbody>
             </table>
-          </section>
+          </Tier>
+          </div>
         </div>
 
         <aside className="stack sticky">
