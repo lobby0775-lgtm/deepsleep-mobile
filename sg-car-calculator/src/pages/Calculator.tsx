@@ -258,7 +258,10 @@ export function Calculator() {
               <NumberField label="Main driver's age" value={s.driverAge} onChange={(v) => set('driverAge', v)} min={18} max={99} />
               <NumberField label="Years since licence" value={s.yearsLicensed} onChange={(v) => set('yearsLicensed', v)} min={0} max={80} />
               <NumberField label="Your quote (optional)" prefix="$" suffix="/yr" value={s.insuranceOverride} onChange={(v) => set('insuranceOverride', v)}
-                hint={`Estimate: ${money(r.insuranceEstimate)}/yr (${pct(r.insuranceRate, 1)} of OMV, before NCD). Enter a real quote if you have one.`} />
+                hint={<>
+                Estimate: {money(r.insuranceEstimate)}/yr ({pct(r.insuranceRate, 1)} of OMV, before NCD). Enter a real quote if you
+                have one. <a href="#/insurance">What the premium hides &rarr;</a>
+              </>} />
             </div>
           </section>
 

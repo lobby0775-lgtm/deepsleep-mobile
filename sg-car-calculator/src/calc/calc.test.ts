@@ -3,7 +3,7 @@ import { arfPayable, grossArf, priceBreakdown, roadTaxPerYear } from './tax';
 import { coeRebate, monthsBetween, parfRebate, parfRegimeFor } from './rebates';
 import { earlySettlement, flatRateLoan, maxLoan } from './loan';
 import { newCarDepreciation, usedCarDepreciation } from './depreciation';
-import { estimateInsurance, insuranceRatePct, runningCostsPerYear } from './running';
+import { estimateInsurance, insuranceRatePct, runningCostsPerYear, grossPremium, premiumWithoutNcd, premiumAtNcd, costOfClaim, breakdownOfExcess } from './running';
 import { decodeDeal, type DealQuote } from './deal';
 import { INSURANCE_CEILING, INSURANCE_FLOOR } from './defaults';
 import { CALC_DEFAULTS, resolveLoan, type CalcState } from '../pages/Calculator';
@@ -180,6 +180,112 @@ describe('running costs', () => {
     });
     expect(r.energy).toBe(2_100);
     expect(r.total).toBe(2_100 + 1_200 + 600 + 1_000 + 1_500 + 742);
+  });
+});
+
+describe('insurance, worked from a real policy', () => {
+  // A real quote: $2,400/yr, 50% NCD, 5% safe-driver discount, $2,000 excess.
+  const REAL = { premium: 2400, ncdPct: 50, otherDiscountPct: 5 };
+
+  it('recovers the premium before NCD and other discounts', () => {
+    const gross = grossPremium(REAL);
+    // 2400 / (0.50 x 0.95)
+    expect(gross).toBeCloseTo(5052.63, 2);
+    // Re-pricing the gross at each NCD band, with the 5% discount, lands on
+    // the quoted premium and doubles it at 0% NCD.
+    expect(premiumAtNcd(gross, 50) * 0.95).toBeCloseTo(2400, 1);
+    expect(premiumAtNcd(gross, 40) * 0.95).toBeCloseTo(2880, 1);
+    expect(premiumAtNcd(gross, 0) * 0.95).toBeCloseTo(4800, 1);
+  });
+
+  it('shows what losing the NCD would cost each year, permanently', () => {
+    expect(premiumWithoutNcd(REAL)).toBe(4800);
+    // 50% -> 40% is a 480/yr rise, forever.
+    const lost = grossPremium(REAL) * 0.10 * 0.95;
+    expect(lost).toBeCloseTo(480, 2);
+  });
+
+  it('prices a claim as excess plus the permanent loss of the NCD', () => {
+    const c = costOfClaim({
+      damage: 8000,
+      excess: 2000,
+      premium: 2400,
+      ncdPct: 50,
+      otherDiscountPct: 5,
+      ncdLostPct: 50,
+      yearsOwned: 5,
+    });
+    // You hand over the $2,000 excess once.
+    expect(c.excessPaid).toBe(2000);
+    // The NCD loss is $2,400/yr for 5 years.
+    expect(c.annualNcdCost).toBeCloseTo(2400, 1);
+    expect(c.ncdCostOverYears).toBeCloseTo(12000, 0);
+    // Fixing it yourself: $8,000, and you keep the NCD.
+    expect(c.selfPayCost).toBe(8000);
+    // Claiming: $2,000 excess + $12,000 of lost NCD = $14,000. You pay $6,000
+    // MORE to hand a claim you did not need to make.
+    expect(c.claimCost).toBeCloseTo(14000, 0);
+    expect(c.claimOverhead).toBeCloseTo(6000, 0);
+    expect(c.multiplesOfDamage).toBeCloseTo(1.75, 2);
+    expect(c.worthClaiming).toBe(false);
+  });
+
+  it('rewards a claim when the damage is large and the NCD loss is modest', () => {
+    // Damage well above the excess, on a car insured at $4,800/yr with 20% NCD.
+    const c = costOfClaim({
+      damage: 8000, excess: 2000, premium: 4800, ncdPct: 20,
+      otherDiscountPct: 5, ncdLostPct: 10, yearsOwned: 5,
+    });
+    // Gross is 4,800 / (0.80 x 0.95) = 6,315.79; losing 10 points costs $600/yr.
+    expect(c.annualNcdCost).toBeCloseTo(600, 0);
+    // Claim: $2,000 excess + $3,000 lost NCD = $5,000, against $8,000 to fix it
+    // yourself. Worth claiming, and $3,000 better than paying the shop.
+    expect(c.claimCost).toBeCloseTo(5000, 0);
+    expect(c.claimOverhead).toBeCloseTo(-3000, 0);
+    expect(c.worthClaiming).toBe(true);
+  });
+
+  it('refuses to encourage a claim that costs more than the damage', () => {
+    // A $900 scrape on a car with a full 50% NCD. Claiming costs the excess
+    // plus five years of lost discount, so paying the shop is cheaper. The
+    // function must report that rather than assuming a claim is free money.
+    const c = costOfClaim({
+      damage: 900, excess: 2000, premium: 2400, ncdPct: 50,
+      otherDiscountPct: 5, ncdLostPct: 20, yearsOwned: 5,
+    });
+    expect(c.excessPaid).toBe(900);
+    expect(c.annualNcdCost).toBeCloseTo(960, 0);
+    expect(c.ncdCostOverYears).toBeCloseTo(4800, 0);
+    expect(c.claimCost).toBeCloseTo(5700, 0);
+    expect(c.claimOverhead).toBeCloseTo(4800, 0);
+    expect(c.worthClaiming).toBe(false);
+  });
+
+  it('never charges more excess than the damage', () => {
+    const c = costOfClaim({ damage: 500, excess: 2000, premium: 2400, ncdPct: 50, ncdLostPct: 50, yearsOwned: 5 });
+    expect(c.excessPaid).toBe(500);
+  });
+
+  it('handles a car with no NCD gracefully', () => {
+    const c = costOfClaim({ damage: 5000, excess: 2000, premium: 5000, ncdPct: 0, ncdLostPct: 0, yearsOwned: 5 });
+    expect(c.annualNcdCost).toBe(0);
+    expect(c.claimCost).toBe(2000);
+    expect(c.worthClaiming).toBe(true);
+    expect(grossPremium({ premium: 5000, ncdPct: 0 })).toBe(5000);
+  });
+
+  it('defaults the theft excess to 10% of value, which is usually the bigger number', () => {
+    const b = breakdownOfExcess({ damageExcess: 2000, omv: 22000 });
+    expect(b.theftExcess).toBe(2200);
+    expect(b.worstCaseExcess).toBe(2200);
+    expect(b.worstCasePctOfValue).toBe(10);
+    expect(b.totalLossPayout).toBe(19800);
+  });
+
+  it('uses whichever excess is larger, and can be told a higher theft rate', () => {
+    const b = breakdownOfExcess({ damageExcess: 5000, omv: 10000, theftPct: 0.2 });
+    expect(b.theftExcess).toBe(2000);
+    expect(b.worstCaseExcess).toBe(5000);
   });
 });
 

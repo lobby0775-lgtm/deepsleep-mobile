@@ -10,6 +10,7 @@ const TOOLS = [
   { href: '#/deal', title: 'Deal decoder', text: 'Enter a dealer quote line by line. See the real total and the traps in the fine print.' },
   { href: '#/depreciation', title: 'Depreciation', text: 'How much value a new or used car loses each year, and what it will be worth when you sell.' },
   { href: '#/trade-in', title: 'Trade-in', text: "Your car's guaranteed floor value, and whether the offer is any better than that." },
+  { href: '#/insurance', title: 'Insurance', text: 'What the premium hides: the discount you lose, the excess you pay, and what a claim really costs.' },
 ];
 
 export function Home() {
