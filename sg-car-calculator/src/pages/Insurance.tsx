@@ -90,6 +90,9 @@ export function Insurance() {
     <>
       <div className="page-head">
         <h1>What your insurance really costs</h1>
+        <p className="small muted" style={{ marginTop: -8 }}>
+          Got more than one quote? <a href="#/quotes">Compare them properly &rarr;</a>
+        </p>
         <p>
           The premium is the smallest part. The expensive parts are the discount you would lose by claiming, the excess you pay
           on every claim, and the fact that most policies price theft and total loss as a share of the car's value rather than

@@ -72,6 +72,18 @@ const leaked = await page.evaluate(() => {
 });
 check('share payload does not leak across pages', leaked.length === 0, leaked.length ? `leaked: ${leaked}` : 'clean');
 
+/* --- quote comparison: a cheaper-to-pay quote must not win on ranking --- */
+await page.goto(`${URL}/#/quotes`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(400);
+const quoteFinding = await page.locator('aside').innerText();
+check(
+  'quote comparison catches a discount-disguised quote',
+  /discount is doing the work|highest in the field/.test(quoteFinding),
+  quoteFinding.split('\n').find((l) => /discount|highest/.test(l))?.trim().slice(0, 110) ?? 'no finding shown',
+);
+const rateRow = await page.locator('table.lines tbody tr', { hasText: 'Insurer A' }).first().innerText();
+check('quotes are ranked on rate, not on premium paid', /\$5,053/.test(rateRow) && /\$2,400/.test(rateRow), rateRow.replace(/\n/g, ' | '));
+
 check('no page errors', errors.length === 0, errors.slice(0, 2).join(' | '));
 
 await browser.close();

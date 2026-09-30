@@ -6,6 +6,7 @@ import { DealDecoder } from './pages/DealDecoder';
 import { Depreciation } from './pages/Depreciation';
 import { TradeIn } from './pages/TradeIn';
 import { Insurance } from './pages/Insurance';
+import { InsuranceQuotes } from './pages/InsuranceQuotes';
 import { Guides } from './pages/Guides';
 
 const NAV = [
@@ -14,6 +15,7 @@ const NAV = [
   { path: 'depreciation', label: 'Depreciation' },
   { path: 'trade-in', label: 'Trade-in' },
   { path: 'insurance', label: 'Insurance' },
+  { path: 'quotes', label: 'Compare quotes' },
   { path: 'guides', label: 'Guide' },
 ];
 
@@ -45,6 +47,7 @@ export function App() {
     case 'depreciation': page = <Depreciation />; break;
     case 'trade-in': page = <TradeIn />; break;
     case 'insurance': page = <Insurance />; break;
+    case 'quotes': page = <InsuranceQuotes />; break;
     case 'guides': page = <Guides term={route.sub} />; break;
     default: page = <Home />;
   }

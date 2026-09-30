@@ -558,6 +558,33 @@ input::placeholder { color: var(--muted); }
 }
 .answer .figure-xl { margin-right: auto; }
 
+/* A list of things to ask before committing, not a set of answers. */
+.questions {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: q;
+}
+.questions li {
+  counter-increment: q;
+  padding: 10px 0 10px 28px;
+  border-top: 1px solid var(--rule-soft);
+  position: relative;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.questions li:first-child { border-top: 0; }
+.questions li::before {
+  content: counter(q);
+  position: absolute;
+  left: 0;
+  top: 10px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
 input[type='range'] { width: 100%; accent-color: var(--accent); }
 details summary { cursor: pointer; font-weight: 600; font-size: 0.9375rem; }
 details[open] summary { margin-bottom: 12px; }
