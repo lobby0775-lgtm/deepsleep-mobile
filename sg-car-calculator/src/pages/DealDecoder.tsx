@@ -1,7 +1,7 @@
 import { COE_LATEST, MARKET_FLAT_RATE, type CoeCategory } from '../calc/defaults';
 import { decodeDeal, type Freebie } from '../calc/deal';
 import { money, pct } from '../calc/format';
-import { Check, NumberField, Segmented, SelectField, Stat } from '../components/Fields';
+import { Check, FlagList, NumberField, Segmented, SelectField, Stat } from '../components/Fields';
 import { usePersistentState } from '../state';
 
 const DEFAULTS = {
@@ -35,10 +35,8 @@ const DEFAULTS = {
   depositRefundable: false,
 };
 
-const Icon = { danger: '!', warn: '!', info: 'i', good: '✓' } as const;
-
 export function DealDecoder() {
-  const [s, , set] = usePersistentState('deal', DEFAULTS);
+  const [s, , set] = usePersistentState('deal', DEFAULTS, 'deal');
   const r = decodeDeal({
     ...s,
     loanAmount: s.takeLoan ? s.loanAmount : 0,
@@ -64,8 +62,8 @@ export function DealDecoder() {
 
       <div className="cols">
         <div className="stack">
-          <section className="card">
-            <h2>Price and COE</h2>
+          <section>
+            <div className="rule-head"><h2>Price and COE</h2></div>
             <div className="grid-2">
               <NumberField label="Package price" prefix="$" value={s.packagePrice} onChange={(v) => set('packagePrice', v)} />
               <NumberField label="OMV" help="omv" prefix="$" value={s.omv} onChange={(v) => set('omv', v)} hint="Sets how much you can borrow" />
@@ -91,8 +89,8 @@ export function DealDecoder() {
             </div>
           </section>
 
-          <section className="card">
-            <h2>Loan</h2>
+          <section>
+            <div className="rule-head"><h2>Loan</h2></div>
             <Check checked={s.takeLoan} onChange={(v) => set('takeLoan', v)}>The deal includes the dealer's loan</Check>
             {s.takeLoan && (
               <div className="grid-2" style={{ marginTop: 12 }}>
@@ -104,8 +102,8 @@ export function DealDecoder() {
             )}
           </section>
 
-          <section className="card">
-            <h2>Insurance</h2>
+          <section>
+            <div className="rule-head"><h2>Insurance</h2></div>
             <Check checked={s.insuranceRequired} onChange={(v) => set('insuranceRequired', v)}>I must take the dealer's insurance</Check>
             {s.insuranceRequired && (
               <div className="grid-2" style={{ marginTop: 12 }}>
@@ -116,8 +114,8 @@ export function DealDecoder() {
             )}
           </section>
 
-          <section className="card">
-            <h2>Freebies</h2>
+          <section>
+            <div className="rule-head"><h2>Freebies</h2></div>
             <p className="small muted">Tick only the ones you'd pay for yourself.</p>
             <div className="stack">
               {s.freebies.map((f, i) => (
@@ -138,8 +136,8 @@ export function DealDecoder() {
             </div>
           </section>
 
-          <section className="card">
-            <h2>Trade-in</h2>
+          <section>
+            <div className="rule-head"><h2>Trade-in</h2></div>
             <Check checked={s.hasTradeIn} onChange={(v) => set('hasTradeIn', v)}>I'm trading in my current car</Check>
             {s.hasTradeIn && (
               <div className="grid-2" style={{ marginTop: 12 }}>
@@ -151,9 +149,9 @@ export function DealDecoder() {
         </div>
 
         <aside className="stack sticky">
-          <section className="card">
+          <section>
             <h2>What this deal really costs</h2>
-            <div className="hero-num">{money(r.totalOutlay)}</div>
+            <div className="figure-xl">{money(r.totalOutlay)}</div>
             <p className="muted small">Price + fees + loan interest + required insurance{s.hasTradeIn ? ' − trade-in' : ''}.</p>
             <div className="stats">
               <Stat label="Price incl. fees" value={money(r.allInPrice)} />
@@ -163,24 +161,16 @@ export function DealDecoder() {
             </div>
           </section>
 
-          <section className="card">
-            <div className="card-head">
-              <h2>Red flags</h2>
-              <span className="small muted">{dangers ? `${dangers} serious` : 'None serious'}</span>
+          <section>
+            <div className="rule-head">
+              <h2>What to check</h2>
+              <span className="small muted">{dangers ? `${dangers} serious` : 'Nothing serious'}</span>
             </div>
-            {flags.map((f) => (
-              <div key={f.title} className={`flag flag-${f.severity}`}>
-                <span className="icon" aria-hidden="true">{Icon[f.severity]}</span>
-                <div>
-                  <strong>{f.title}</strong>
-                  <p>{f.detail}</p>
-                </div>
-              </div>
-            ))}
+            {flags.length ? <FlagList items={flags} /> : <p className="muted small">No problems found in this quote.</p>}
           </section>
 
-          <section className="card">
-            <h3>Questions to ask the salesperson</h3>
+          <section>
+            <h2 style={{ borderTop: '1px solid var(--ink)', paddingTop: 12 }}>Questions to ask</h2>
             <ul className="small" style={{ paddingLeft: 18, margin: 0 }}>
               <li>What COE does this price assume, and what happens if I don't get one?</li>
               <li>What's the price without your loan, insurance or trade-in?</li>

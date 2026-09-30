@@ -191,7 +191,7 @@ export function Guides({ term }: { term?: string }) {
       </div>
       <div className="stack" style={{ maxWidth: 760 }}>
         {GUIDES.map((g) => (
-          <section key={g.id} id={g.id} className="card guide" style={term === g.id ? { borderColor: 'var(--accent)' } : undefined}>
+          <section key={g.id} id={g.id} className="guide" style={term === g.id ? { borderLeftWidth: 3, borderLeftColor: 'var(--accent)', paddingLeft: 16, marginLeft: -19 } : undefined}>
             <h2>{g.title}</h2>
             {g.body}
           </section>

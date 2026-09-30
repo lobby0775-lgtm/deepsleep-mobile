@@ -55,7 +55,7 @@ export function NumberField(props: {
             props.onChange(v);
           }}
         />
-        {props.suffix && <span className="affix">{props.suffix}</span>}
+        {props.suffix && <span className="affix affix-suffix">{props.suffix}</span>}
       </div>
       {props.hint && <span className="field-hint">{props.hint}</span>}
     </div>
@@ -144,8 +144,30 @@ export function Stat(props: { label: ReactNode; value: ReactNode; sub?: ReactNod
   return (
     <div className="stat">
       <div className="label">{props.label}</div>
-      <div className="value num">{props.value}</div>
+      <div className="value">{props.value}</div>
       {props.sub && <div className="sub">{props.sub}</div>}
+    </div>
+  );
+}
+
+/**
+ * A finding worth surfacing: severity, one-line headline, one paragraph of
+ * why it matters. Rendered as a left rule rather than a coloured bubble, so a
+ * page full of them reads as a list of findings rather than a wall of alerts.
+ */
+export function FlagList({ items }: { items: { severity: 'danger' | 'warn' | 'info' | 'good'; title: string; detail: string }[] }) {
+  const TAG = { danger: 'Problem', warn: 'Watch', info: 'Note', good: 'Good' } as const;
+  return (
+    <div>
+      {items.map((f) => (
+        <div key={f.title} className={`flag flag-${f.severity}`}>
+          <div className="flag-head">
+            <span className="tag">{TAG[f.severity]}</span>
+            <strong>{f.title}</strong>
+          </div>
+          <p>{f.detail}</p>
+        </div>
+      ))}
     </div>
   );
 }

@@ -83,7 +83,7 @@ function Schedule({ d, startLabel, price, startPaper }: { d: DepreciationResult;
 }
 
 export function Depreciation() {
-  const [s, setAll, set] = usePersistentState('depreciation', DEFAULTS);
+  const [s, setAll, set] = usePersistentState('depreciation', DEFAULTS, 'depreciation');
 
   const isNew = s.mode === 'new';
   const newDep = newCarDepreciation({ price: s.price, arfPaid: s.arfPaid, coePaid: s.coePaid, regime: s.regime });
@@ -111,12 +111,12 @@ export function Depreciation() {
 
       <div className="cols results-first">
         <div className="stack">
-          <section className="card">
+          <section>
             {isNew ? (
               <>
-                <div className="card-head">
+                <div className="rule-head">
                   <h2>New car</h2>
-                  <button className="btn btn-sm" onClick={() => setAll((p) => ({ ...p, ...calculatorCar() }))}>Use my calculator car</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setAll((p) => ({ ...p, ...calculatorCar() }))}>Use my calculator car</button>
                 </div>
                 <div className="grid-2">
                   <NumberField label="Price paid" prefix="$" value={s.price} onChange={(v) => set('price', v)} />
@@ -127,7 +127,7 @@ export function Depreciation() {
               </>
             ) : (
               <>
-                <div className="card-head"><h2>Used car</h2></div>
+                <div className="rule-head"><h2>Used car</h2></div>
                 <div className="grid-2">
                   <NumberField label="Asking price" prefix="$" value={s.usedPrice} onChange={(v) => set('usedPrice', v)} />
                   <DateField label="Registration date" value={s.regDate} onChange={(v) => setAll((p) => ({ ...p, regDate: v, coeExpiry: p.coeRenewed ? p.coeExpiry : addYears(v, 10) }))} />
@@ -153,8 +153,8 @@ export function Depreciation() {
             )}
           </section>
 
-          <section className="card">
-            <h2>Year by year</h2>
+          <section>
+            <div className="rule-head"><h2>Year by year</h2></div>
             <p className="small muted">
               <b>Market value</b> falls in a straight line to what the car is worth when its COE runs out. That's how dealers and
               listing sites price cars. <b>Paper value</b> is the guaranteed floor: what LTA refunds if you deregister that year.
@@ -164,9 +164,9 @@ export function Depreciation() {
         </div>
 
         <aside className="stack sticky">
-          <section className="card">
-            <h2>Depreciation</h2>
-            <div className="hero-num">{money(d.annual)}<span className="muted" style={{ fontSize: '1rem', fontWeight: 500 }}> / year</span></div>
+          <section>
+            <div className="rule-head"><h2>Depreciation</h2></div>
+            <div className="figure-xl">{money(d.annual)}<span className="figure-unit"> / year</span></div>
             <p className="muted small">
               ({money(isNew ? s.price : s.usedPrice)} − {money(d.residual)} left at COE expiry) ÷ {d.yearsLeft.toFixed(1)} years
               = {money(d.annual / 12)} a month.
@@ -179,8 +179,8 @@ export function Depreciation() {
           </section>
 
           {isNew && s.regime === 'budget2026' && (
-            <section className="card">
-              <h3>Budget 2026 made new cars depreciate faster</h3>
+            <section>
+              <h2 style={{ borderTop: '1px solid var(--ink)', paddingTop: 12 }}>Budget 2026 made new cars depreciate faster</h2>
               <p className="small">
                 Cars with COEs from February 2026 get back at most 30% of ARF, falling to 5% by year 10 and capped at $30,000.
                 Before, it was 75%, falling to 50%. For this car:
@@ -196,8 +196,8 @@ export function Depreciation() {
           )}
 
           {!isNew && (
-            <section className="card">
-              <h3>Reading a used-car listing</h3>
+            <section>
+              <h2 style={{ borderTop: '1px solid var(--ink)', paddingTop: 12 }}>Reading a used-car listing</h2>
               <p className="small">
                 Listing sites show "depreciation per year" using this same formula. It lets you compare a cheap car with 3 years of
                 COE against a pricier one with 7. The lower number is better value, all else equal.

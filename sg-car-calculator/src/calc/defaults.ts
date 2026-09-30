@@ -91,5 +91,36 @@ export const RUNNING_DEFAULTS = {
   servicingPerYear: 1_000,
 };
 
-/** Comprehensive premium before No-Claim Discount, experienced driver. Rough market level. */
-export const INSURANCE_BASE: Record<CoeCategory, number> = { A: 2_400, B: 3_600 };
+/**
+ * How comprehensive insurance is priced.
+ *
+ * Insurers rate mostly off OMV, not the retail price, so a car that costs
+ * $210,000 on the road because of COE isn't insured for $210,000. The rate
+ * itself falls as OMV rises: cheap cars pay a higher percentage, expensive
+ * cars a lower one. These bands are the rough market shape — real quotes vary
+ * a lot by insurer, model and driving record, which is why the UI takes a real
+ * quote whenever you have one.
+ */
+export const INSURANCE_OMV_BANDS: { upTo: number; ratePct: number }[] = [
+  { upTo: 15_000, ratePct: 12.0 },
+  { upTo: 25_000, ratePct: 10.5 },
+  { upTo: 40_000, ratePct: 9.0 },
+  { upTo: 60_000, ratePct: 8.0 },
+  { upTo: Infinity, ratePct: 7.0 },
+];
+
+/** No insurer writes comprehensive cover below this, whatever the OMV. */
+export const INSURANCE_FLOOR = 1_300;
+/** Sanity ceiling: nobody pays more than this for a street car. */
+export const INSURANCE_CEILING = 6_500;
+
+/** Extra loading for the engine capacity, above a 1,600cc Cat A baseline. */
+export const INSURANCE_ENGINE_BANDS: { overCc: number; factor: number }[] = [
+  { overCc: 2_000, factor: 1.35 },
+  { overCc: 1_600, factor: 1.2 },
+  { overCc: 0, factor: 1.0 },
+];
+
+/** Very fast or very powerful cars (turbo/electric) take a modest loading. */
+export const INSURANCE_POWER_THRESHOLD_KW = 120;
+export const INSURANCE_POWER_FACTOR = 1.12;

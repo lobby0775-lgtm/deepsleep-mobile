@@ -3,8 +3,10 @@ import { arfPayable, grossArf, priceBreakdown, roadTaxPerYear } from './tax';
 import { coeRebate, monthsBetween, parfRebate, parfRegimeFor } from './rebates';
 import { earlySettlement, flatRateLoan, maxLoan } from './loan';
 import { newCarDepreciation, usedCarDepreciation } from './depreciation';
-import { estimateInsurance, runningCostsPerYear } from './running';
+import { estimateInsurance, insuranceRatePct, runningCostsPerYear } from './running';
 import { decodeDeal, type DealQuote } from './deal';
+import { INSURANCE_CEILING, INSURANCE_FLOOR } from './defaults';
+import { CALC_DEFAULTS, resolveLoan, type CalcState } from '../pages/Calculator';
 
 describe('ARF', () => {
   it('applies the tiered rates', () => {
@@ -142,9 +144,33 @@ describe('depreciation', () => {
 });
 
 describe('running costs', () => {
-  it('estimates insurance with NCD', () => {
-    expect(estimateInsurance({ category: 'A', ncdPct: 50, driverAge: 35, yearsLicensed: 10, carValue: 150_000 })).toBe(1_200);
-    expect(estimateInsurance({ category: 'A', ncdPct: 0, driverAge: 23, yearsLicensed: 1, carValue: 150_000 })).toBe(4_210);
+  const prof = { ncdPct: 0, driverAge: 35, yearsLicensed: 10, engineCc: 0, powerKW: 0 };
+  it('rates off OMV, with the rate falling as the car gets dearer', () => {
+    expect(insuranceRatePct(12_000)).toBe(12);
+    expect(insuranceRatePct(22_000)).toBe(10.5);
+    expect(insuranceRatePct(35_000)).toBe(9);
+    expect(insuranceRatePct(50_000)).toBe(8);
+    expect(insuranceRatePct(120_000)).toBe(7);
+    // Cheap car, high percentage: 12% of a $10k OMV falls below the floor
+    expect(estimateInsurance({ ...prof, omv: 10_000 })).toBe(INSURANCE_FLOOR);
+    // Straight percentage: 10.5% of a $22k OMV
+    expect(estimateInsurance({ ...prof, omv: 22_000 })).toBe(2_310);
+    // Dear car, low percentage: 7% of a $100k OMV is far more in absolute terms
+    expect(estimateInsurance({ ...prof, omv: 100_000 })).toBe(INSURANCE_CEILING);
+  });
+  it('loads for engine size, power and driver, then discounts for NCD', () => {
+    const base = estimateInsurance({ ...prof, omv: 30_000 });
+    expect(estimateInsurance({ ...prof, omv: 30_000, engineCc: 2_400 })).toBeGreaterThan(base);
+    expect(estimateInsurance({ ...prof, omv: 30_000, powerKW: 200 })).toBeGreaterThan(base);
+    expect(estimateInsurance({ ...prof, omv: 30_000, driverAge: 23 })).toBeGreaterThan(base);
+    expect(estimateInsurance({ ...prof, omv: 30_000, yearsLicensed: 1 })).toBeGreaterThan(base);
+    expect(estimateInsurance({ ...prof, omv: 30_000, ncdPct: 50 })).toBeLessThan(base);
+  });
+  it('clamps to the market floor and ceiling', () => {
+    // A $1 OMV with a 50% NCD would otherwise fall through the floor
+    expect(estimateInsurance({ ...prof, omv: 1_000, ncdPct: 50 })).toBe(INSURANCE_FLOOR);
+    // A supercar OMV is still capped
+    expect(estimateInsurance({ ...prof, omv: 400_000, engineCc: 6_000, powerKW: 500 })).toBe(INSURANCE_CEILING);
   });
   it('totals yearly running costs', () => {
     const r = runningCostsPerYear({
@@ -154,6 +180,47 @@ describe('running costs', () => {
     });
     expect(r.energy).toBe(2_100);
     expect(r.total).toBe(2_100 + 1_200 + 600 + 1_000 + 1_500 + 742);
+  });
+});
+
+describe('loan amount input', () => {
+  const cap = (omv: number) => maxLoan(200_000, omv);
+  const withLoan = (over: Partial<CalcState>) => ({ ...CALC_DEFAULTS, dealerPrice: 200_000, ...over });
+
+  it('derives the loan from the percentage when that is the active input', () => {
+    const s = withLoan({ loanInput: 'pct', loanPct: 60 });
+    const r = resolveLoan(s, cap(30_000)); // OMV > 20k, so 60% LTV
+    expect(r.loanAmount).toBe(120_000);
+    expect(r.loanPct).toBe(60);
+    expect(r.overCap).toBe(false);
+  });
+
+  it('uses the dollar amount when that is the active input', () => {
+    const s = withLoan({ loanInput: 'amount', loanPct: 60, loanAmountOverride: 95_000 });
+    const r = resolveLoan(s, cap(30_000));
+    expect(r.loanAmount).toBe(95_000);
+    // Reported back as the percentage it works out to
+    expect(r.loanPct).toBe(48);
+  });
+
+  it('never lends more than MAS allows, and says so', () => {
+    // 70% LTV for OMV under $20k = $140,000 cap
+    const s = withLoan({ loanInput: 'amount', loanAmountOverride: 175_000 });
+    const r = resolveLoan(s, cap(15_000));
+    expect(r.loanAmount).toBe(140_000);
+    expect(r.overCap).toBe(true);
+  });
+
+  it('caps a percentage dragged past the LTV limit', () => {
+    const s = withLoan({ loanInput: 'pct', loanPct: 95 });
+    const r = resolveLoan(s, cap(15_000));
+    expect(r.loanAmount).toBe(140_000);
+    expect(r.overCap).toBe(false); // the slider can't exceed the cap, so nothing to flag
+  });
+
+  it('handles zero and negative amounts without producing a negative loan', () => {
+    expect(resolveLoan(withLoan({ loanInput: 'amount', loanAmountOverride: 0 }), cap(30_000)).loanAmount).toBe(0);
+    expect(resolveLoan(withLoan({ loanInput: 'amount', loanAmountOverride: -5_000 }), cap(30_000)).loanAmount).toBe(0);
   });
 });
 

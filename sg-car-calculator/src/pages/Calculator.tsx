@@ -3,9 +3,9 @@ import { COE_LATEST, COE_LATEST_LABEL, DATA_AS_OF, MARKET_FLAT_RATE, RUNNING_DEF
 import { priceBreakdown, roadTaxPerYear } from '../calc/tax';
 import { earlySettlement, flatRateLoan, maxLoan } from '../calc/loan';
 import { newCarDepreciation } from '../calc/depreciation';
-import { estimateInsurance, runningCostsPerYear } from '../calc/running';
-import { money, pct } from '../calc/format';
-import { Check, NumberField, Segmented, SelectField, Stat } from '../components/Fields';
+import { estimateInsurance, insuranceRatePct, runningCostsPerYear } from '../calc/running';
+import { money, pct, fmtMoney } from '../calc/format';
+import { Check, FlagList, NumberField, Segmented, SelectField, Stat } from '../components/Fields';
 import { Breakdown } from '../components/Breakdown';
 import { StackedBar } from '../components/Charts';
 import { PRESETS } from '../presets';
@@ -24,7 +24,10 @@ export const CALC_DEFAULTS = {
   regYear: 2026,
   coe: COE_LATEST[first.category],
   takeLoan: true,
+  /** 'pct' keeps loanPct as the source of truth; 'amount' keeps loanAmount. */
+  loanInput: 'pct' as 'pct' | 'amount',
   loanPct: 60,
+  loanAmountOverride: 0,
   flatRate: MARKET_FLAT_RATE,
   loanYears: 7,
   keepYears: 10,
@@ -43,13 +46,30 @@ export const CALC_DEFAULTS = {
 };
 export type CalcState = typeof CALC_DEFAULTS;
 
+/**
+ * Resolve the loan from whichever input the user is driving.
+ *
+ * Both a percentage and a dollar amount are accepted because lenders quote
+ * both, and the amount is usually what the buyer is actually approved for.
+ * Either way the MAS loan-to-value cap wins, so the number shown can never
+ * exceed what a bank will legally lend.
+ */
+export function resolveLoan(s: CalcState, cap: { ltv: number; amount: number; maxYears: number }) {
+  const byAmount = s.loanInput === 'amount';
+  const raw = byAmount ? s.loanAmountOverride : (s.dealerPrice * s.loanPct) / 100;
+  const loanAmount = Math.max(0, Math.min(Math.round(raw), cap.amount));
+  const loanPct = s.dealerPrice > 0 ? Math.round((loanAmount / s.dealerPrice) * 100) : 0;
+  const overCap = byAmount && s.loanAmountOverride > cap.amount;
+  return { byAmount, loanAmount, loanPct, overCap, maxYears: cap.maxYears };
+}
+
 /** Everything the calculator derives from its inputs. Shared with the depreciation page. */
 export function computeOwnership(s: CalcState) {
   const breakdown = priceBreakdown({ omv: s.omv, coe: s.coe, fuel: s.fuel, vesBand: s.vesBand, regYear: s.regYear, dealerPrice: s.dealerPrice });
   const cap = maxLoan(s.dealerPrice, s.omv);
-  const loanPct = Math.min(s.loanPct, cap.ltv * 100);
-  const loanAmount = s.takeLoan ? Math.round((s.dealerPrice * loanPct) / 100) : 0;
-  const loanYears = Math.min(s.loanYears, cap.maxYears);
+  const l = resolveLoan(s, cap);
+  const loanAmount = s.takeLoan ? l.loanAmount : 0;
+  const loanYears = Math.min(s.loanYears, l.maxYears);
   const loan = flatRateLoan(loanAmount, s.flatRate, loanYears);
   const keepMonths = s.keepYears * 12;
   const interestPaid = keepMonths >= loan.months ? loan.totalInterest : earlySettlement(loan, keepMonths).interestPaid;
@@ -58,7 +78,8 @@ export function computeOwnership(s: CalcState) {
   const exit = dep.schedule[s.keepYears - 1];
 
   const insuranceEstimate = estimateInsurance({
-    category: s.category, ncdPct: s.ncdPct, driverAge: s.driverAge, yearsLicensed: s.yearsLicensed, carValue: s.dealerPrice,
+    omv: s.omv, ncdPct: s.ncdPct, driverAge: s.driverAge, yearsLicensed: s.yearsLicensed,
+    engineCc: s.engineCc, powerKW: s.powerKW,
   });
   const roadTax = roadTaxPerYear(s.fuel, s.engineCc, s.powerKW);
   const running = runningCostsPerYear({
@@ -79,8 +100,9 @@ export function computeOwnership(s: CalcState) {
   const runningTotal = running.total * s.keepYears;
   const total = depreciation + interestPaid + runningTotal;
   return {
-    breakdown, cap, loanPct, loanAmount, loanYears, loan, interestPaid, dep, exit,
-    insuranceEstimate, roadTax, running, depreciation, runningTotal, total,
+    breakdown, cap, loanPct: l.loanPct, loanAmount, loanYears, loan, interestPaid, dep, exit,
+    loanOverCap: l.overCap, loanByAmount: l.byAmount,
+    insuranceEstimate, insuranceRate: insuranceRatePct(s.omv), roadTax, running, depreciation, runningTotal, total,
     perMonth: total / keepMonths,
     downpayment: s.dealerPrice - loanAmount,
     monthlyOutgoing: (keepMonths >= 1 && loan.months > 0 ? loan.monthly : 0) + running.total / 12,
@@ -88,7 +110,7 @@ export function computeOwnership(s: CalcState) {
 }
 
 export function Calculator() {
-  const [s, setAll, set] = usePersistentState('calc', CALC_DEFAULTS);
+  const [s, setAll, set] = usePersistentState('calc', CALC_DEFAULTS, 'calculator');
   const [copied, setCopied] = useState(false);
   const r = computeOwnership(s);
 
@@ -122,11 +144,11 @@ export function Calculator() {
   };
 
   const costSegments = [
-    { label: 'Depreciation', value: r.depreciation, color: 'var(--s1)' },
-    { label: 'Loan interest', value: r.interestPaid, color: 'var(--s2)' },
-    { label: 'Insurance', value: r.running.insurance * s.keepYears, color: 'var(--s3)' },
-    { label: s.fuel === 'ev' ? 'Charging' : 'Petrol', value: r.running.energy * s.keepYears, color: 'var(--s4)' },
-    { label: 'Parking, ERP, road tax, servicing', value: (r.running.parking + r.running.erp + r.running.roadTax + r.running.servicing) * s.keepYears, color: 'var(--s5)' },
+    { label: 'Depreciation', value: r.depreciation },
+    { label: 'Loan interest', value: r.interestPaid },
+    { label: 'Insurance', value: r.running.insurance * s.keepYears },
+    { label: s.fuel === 'ev' ? 'Charging' : 'Petrol', value: r.running.energy * s.keepYears },
+    { label: 'Parking, ERP, road tax, servicing', value: (r.running.parking + r.running.erp + r.running.roadTax + r.running.servicing) * s.keepYears },
   ];
 
   return (
@@ -144,8 +166,8 @@ export function Calculator() {
 
       <div className="cols">
         <div className="stack">
-          <section className="card">
-            <div className="card-head"><h2><span className="step">1</span>The car</h2></div>
+          <section>
+            <div className="rule-head"><h2><span className="step">01</span>The car</h2></div>
             <div className="grid-2">
               <NumberField label="Dealer's price" prefix="$" value={s.dealerPrice} onChange={(v) => set('dealerPrice', v)} hint="Including COE, as quoted" />
               <NumberField label="OMV" help="omv" prefix="$" value={s.omv} onChange={(v) => set('omv', v)} hint="On the dealer's price list or LTA's records" />
@@ -174,21 +196,46 @@ export function Calculator() {
             </div>
           </section>
 
-          <section className="card">
-            <div className="card-head"><h2><span className="step">2</span>Financing</h2></div>
+          <section>
+            <div className="rule-head"><h2><span className="step">02</span>Financing</h2></div>
             <Check checked={s.takeLoan} onChange={(v) => set('takeLoan', v)}>I'm taking a car loan</Check>
             {s.takeLoan && (
               <div className="stack" style={{ marginTop: 12 }}>
-                <div className="field">
-                  <label className="field-label" htmlFor="loanpct">
-                    Loan: {pct(r.loanPct, 0)} of price ({money(r.loanAmount)}) <a className="help" href="#/guides/loan">?</a>
-                  </label>
-                  <input id="loanpct" type="range" min={0} max={r.cap.ltv * 100} step={1} value={r.loanPct} onChange={(e) => set('loanPct', +e.target.value)} />
-                  <span className="field-hint">
-                    MAS caps loans at {pct(r.cap.ltv * 100, 0)} of the price for cars with OMV {s.omv <= 20_000 ? 'up to' : 'above'} $20,000.
-                    You need at least {money(s.dealerPrice - r.cap.amount)} in cash.
-                  </span>
-                </div>
+                <Segmented label="How do you want to set the loan?" value={s.loanInput}
+                  onChange={(v) => setAll((p) => ({ ...p, loanInput: v, loanAmountOverride: v === 'amount' ? Math.round((p.dealerPrice * p.loanPct) / 100) : 0 }))}
+                  options={[{ value: 'pct', label: 'By percentage' }, { value: 'amount', label: 'By amount' }]} />
+                {s.loanInput === 'pct' ? (
+                  <div className="field">
+                    <label className="field-label" htmlFor="loanpct">
+                      Loan: {pct(r.loanPct, 0)} of price ({money(r.loanAmount)}) <a className="help" href="#/guides/loan">?</a>
+                    </label>
+                    <input id="loanpct" type="range" min={0} max={r.cap.ltv * 100} step={1} value={r.loanPct} onChange={(e) => set('loanPct', +e.target.value)} />
+                    <span className="field-hint">
+                      MAS caps loans at {pct(r.cap.ltv * 100, 0)} of the price for cars with OMV {s.omv <= 20_000 ? 'up to' : 'above'} $20,000.
+                      You need at least {money(s.dealerPrice - r.cap.amount)} in cash.
+                    </span>
+                  </div>
+                ) : (
+                  <div className="grid-2">
+                    <NumberField label="Loan amount" prefix="$" value={s.loanAmountOverride} onChange={(v) => set('loanAmountOverride', v)}
+                      hint={`${pct(r.loanPct, 0)} of the price. What's on your approval letter.`} />
+                    <div className="field">
+                      <label className="field-label">Downpayment</label>
+                      <div className="input-wrap">
+                        <span className="affix">$</span>
+                        <input readOnly value={fmtMoney(s.dealerPrice - r.loanAmount)} aria-label="Downpayment" />
+                      </div>
+                      <span className="field-hint">Cash you hand over at signing.</span>
+                    </div>
+                  </div>
+                )}
+                {r.loanOverCap && (
+                  <FlagList items={[{
+                    severity: 'warn',
+                    title: `${money(s.loanAmountOverride - r.cap.amount)} over the legal limit`,
+                    detail: `MAS caps car loans at ${pct(r.cap.ltv * 100, 0)} of the price (${money(r.cap.amount)}) for this OMV. A bigger "loan" is usually a second, pricier personal loan bundled into the deal.`,
+                  }]} />
+                )}
                 <div className="grid-2">
                   <NumberField label="Flat interest rate" help="flat-rate" suffix="% p.a." value={s.flatRate} onChange={(v) => set('flatRate', v)} min={0} max={20} />
                   <SelectField label="Loan tenure" value={r.loanYears} onChange={(v) => set('loanYears', v)}
@@ -203,20 +250,20 @@ export function Calculator() {
             )}
           </section>
 
-          <section className="card">
-            <div className="card-head"><h2><span className="step">3</span>Insurance</h2></div>
+          <section>
+            <div className="rule-head"><h2><span className="step">03</span>Insurance</h2></div>
             <div className="grid-2">
               <SelectField label="No-Claim Discount" help="ncd" value={s.ncdPct} onChange={(v) => set('ncdPct', v)}
                 options={[0, 10, 20, 30, 40, 50].map((n) => ({ value: n, label: `${n}%` }))} />
               <NumberField label="Main driver's age" value={s.driverAge} onChange={(v) => set('driverAge', v)} min={18} max={99} />
               <NumberField label="Years since licence" value={s.yearsLicensed} onChange={(v) => set('yearsLicensed', v)} min={0} max={80} />
               <NumberField label="Your quote (optional)" prefix="$" suffix="/yr" value={s.insuranceOverride} onChange={(v) => set('insuranceOverride', v)}
-                hint={`Estimate: ${money(r.insuranceEstimate)}/yr. Enter a real quote if you have one.`} />
+                hint={`Estimate: ${money(r.insuranceEstimate)}/yr (${pct(r.insuranceRate, 1)} of OMV, before NCD). Enter a real quote if you have one.`} />
             </div>
           </section>
 
-          <section className="card">
-            <div className="card-head"><h2><span className="step">4</span>Running costs</h2></div>
+          <section>
+            <div className="rule-head"><h2><span className="step">04</span>Running costs</h2></div>
             <div className="grid-2">
               <NumberField label="Driving per year" suffix="km" value={s.kmPerYear} onChange={(v) => set('kmPerYear', v)} />
               {s.fuel === 'ev' ? (
@@ -239,16 +286,16 @@ export function Calculator() {
         </div>
 
         <aside className="stack sticky">
-          <section className="card">
-            <div className="card-head">
+          <section>
+            <div className="rule-head">
               <h2>What it really costs</h2>
-              <button className="btn btn-sm" onClick={share}>{copied ? 'Link copied' : 'Share'}</button>
+              <button className="btn btn-ghost btn-sm" onClick={share}>{copied ? 'Copied' : 'Copy link'}</button>
             </div>
             <div className="field" style={{ marginBottom: 12 }}>
               <label className="field-label" htmlFor="keep">If you keep the car for {s.keepYears} year{s.keepYears > 1 ? 's' : ''}</label>
               <input id="keep" type="range" min={1} max={10} value={s.keepYears} onChange={(e) => set('keepYears', +e.target.value)} />
             </div>
-            <div className="hero-num">{money(r.perMonth)}<span className="muted" style={{ fontSize: '1rem', fontWeight: 500 }}> / month</span></div>
+            <div className="figure-xl">{money(r.perMonth)}<span className="figure-unit"> / month</span></div>
             <p className="muted small">{money(r.total)} in total over {s.keepYears} years, all costs included.</p>
             <div className="stats">
               <Stat label="Cash upfront" value={money(r.downpayment)} sub="Downpayment" />
@@ -260,7 +307,7 @@ export function Calculator() {
             <table className="lines">
               <tbody>
                 {costSegments.map((c) => (
-                  <tr key={c.label}><td><span className="key" style={{ background: c.color }} />{c.label}</td><td>{money(c.value)}</td></tr>
+                  <tr key={c.label}><td>{c.label}</td><td>{money(c.value)}</td></tr>
                 ))}
                 <tr className="total"><td>Total over {s.keepYears} years</td><td>{money(r.total)}</td></tr>
               </tbody>
@@ -271,7 +318,7 @@ export function Calculator() {
             </p>
           </section>
 
-          <section className="card">
+          <section>
             <h2>Where the {money(s.dealerPrice)} goes</h2>
             <Breakdown b={r.breakdown} dealerPrice={s.dealerPrice} />
           </section>

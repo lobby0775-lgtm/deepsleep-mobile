@@ -1,7 +1,7 @@
 import { PARF_REGIMES } from '../calc/defaults';
 import { addYears, monthsBetween, paperValue, parfRegimeFor } from '../calc/rebates';
 import { money } from '../calc/format';
-import { Check, DateField, NumberField, Segmented, Stat } from '../components/Fields';
+import { Check, DateField, FlagList, NumberField, Segmented, Stat } from '../components/Fields';
 import { usePersistentState, todayIso } from '../state';
 
 const DEFAULTS = {
@@ -17,7 +17,7 @@ const DEFAULTS = {
 };
 
 export function TradeIn() {
-  const [s, setAll, set] = usePersistentState('tradein', DEFAULTS);
+  const [s, setAll, set] = usePersistentState('tradein', DEFAULTS, 'trade-in');
   const regime = parfRegimeFor(s.regDate);
   const ageMonths = monthsBetween(s.regDate, s.handover);
   const monthsLeft = monthsBetween(s.handover, s.coeExpiry);
@@ -40,7 +40,7 @@ export function TradeIn() {
       </div>
 
       <div className="cols results-first">
-        <section className="card">
+        <section>
           <h2>Your current car</h2>
           <p className="small muted">You'll find these on the car's log card or on OneMotoring under "Vehicle Details".</p>
           <div className="grid-2">
@@ -57,7 +57,7 @@ export function TradeIn() {
             )}
           </div>
           <hr />
-          <h2>The offer</h2>
+          <div className="rule-head"><h2>The offer</h2></div>
           <div className="grid-2">
             <NumberField label="Dealer's trade-in offer" prefix="$" value={s.offer} onChange={(v) => set('offer', v)} />
             <NumberField label="Loan still owed" prefix="$" value={s.outstandingLoan} onChange={(v) => set('outstandingLoan', v)} hint="Ask your bank for the settlement amount" />
@@ -65,41 +65,41 @@ export function TradeIn() {
         </section>
 
         <aside className="stack sticky">
-          <section className="card">
-            <h2>Is the offer fair?</h2>
+          <section>
+            <div className="rule-head"><h2>Is the offer fair?</h2></div>
             <div className="stats">
               <Stat label="Paper value" value={money(pv.total)} sub="Guaranteed floor" />
               <Stat label="Offer" value={money(s.offer)} />
               <Stat label={premium >= 0 ? 'Above paper value' : 'Below paper value'} value={money(Math.abs(premium))} />
             </div>
-            <div style={{ margin: '16px 0' }} aria-hidden="true">
+            <div className="hbar" style={{ margin: '16px 0 8px' }} aria-hidden="true">
               {[
-                { label: 'Paper value', v: pv.total, c: 'var(--s2)' },
-                { label: 'Offer', v: s.offer, c: 'var(--s1)' },
+                { label: 'Paper value', v: pv.total, floor: true },
+                { label: 'Dealer offer', v: s.offer, floor: false },
               ].map((b) => (
-                <div key={b.label} style={{ display: 'grid', gridTemplateColumns: '90px 1fr', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  <span className="small muted">{b.label}</span>
-                  <div style={{ height: 20, width: `${(b.v / max) * 100}%`, background: b.c, borderRadius: '0 4px 4px 0', minWidth: 2 }} />
+                <div key={b.label} className="hbar-row">
+                  <span className="hbar-label">{b.label}</span>
+                  <div className="hbar-track">
+                    <div className={`hbar-fill${b.floor ? ' is-floor' : ''}`} style={{ width: `${Math.min(100, (b.v / max) * 100)}%` }} />
+                  </div>
+                  <span className="hbar-val">{money(b.v)}</span>
                 </div>
               ))}
             </div>
-            {premium < 0 ? (
-              <div className="flag flag-danger">
-                <span className="icon">!</span>
-                <div>
-                  <strong>The offer is {money(-premium)} below paper value</strong>
-                  <p>Deregistering the car yourself (scrap or export) returns more. Reject the offer or ask for at least {money(pv.total)}.</p>
-                </div>
-              </div>
-            ) : (
-              <div className="flag flag-info">
-                <span className="icon">i</span>
-                <div>
-                  <strong>The dealer is paying {money(premium)} for the car itself</strong>
-                  <p>That's the part to negotiate. Get 2–3 quotes from used-car dealers or a direct-to-buyer platform to compare.</p>
-                </div>
-              </div>
-            )}
+            <p className="small muted" style={{ marginTop: 0, marginBottom: 0 }}>
+              {premium >= 0
+                ? `The offer clears the floor by ${money(premium)}. That gap is the car's actual worth above scrap value.`
+                : `The offer falls ${money(-premium)} short of the floor you are guaranteed on paper.`}
+            </p>
+            <FlagList items={[premium < 0
+              ? { severity: 'danger' as const,
+                  title: `The offer is ${money(-premium)} below paper value`,
+                  detail: `Deregistering the car yourself (scrap or export) returns more. Reject the offer, or ask for at least ${money(pv.total)}.`,
+                }
+              : { severity: 'info' as const,
+                  title: `The dealer is paying ${money(premium)} for the car itself`,
+                  detail: `That is the part to negotiate. Get two or three quotes from used-car dealers, or a direct-to-buyer platform, to compare.`,
+                }]} />
             <table className="lines" style={{ marginTop: 12 }}>
               <tbody>
                 <tr><td>PARF rebate <a className="help" href="#/guides/parf">?</a><div className="small muted">{s.coeRenewed ? 'None after COE renewal' : `${(ageMonths / 12).toFixed(1)} yrs old · ${PARF_REGIMES[regime].label}`}</div></td><td>{money(pv.parf)}</td></tr>
@@ -114,8 +114,8 @@ export function TradeIn() {
             )}
           </section>
 
-          <section className="card">
-            <h3>Watch for the swap trick</h3>
+          <section>
+            <h2 style={{ borderTop: '1px solid var(--ink)', paddingTop: 12 }}>Watch for the swap trick</h2>
             <p className="small" style={{ marginBottom: 0 }}>
               A dealer can offer a generous trade-in and give a smaller discount on the new car, or the other way round. Only the
               net figure matters: <b>new car price − trade-in</b>. Ask for the new-car price without a trade-in, then sell your car

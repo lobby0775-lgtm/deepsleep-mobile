@@ -9,6 +9,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc -b",
+    "smoke": "node scripts/smoke.mjs",
+    "check:data": "node scripts/check-lta.mjs",
     "deploy": "npm run build && wrangler pages deploy --project-name openbonnet --branch main"
   },
   "dependencies": {
@@ -19,9 +21,13 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
+    "playwright": "^1.63.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.1",
     "vitest": "^5.0.2",
     "wrangler": "^4.141.0"
+  },
+  "allowScripts": {
+    "workerd@1.20260925.1": true
   }
 }
