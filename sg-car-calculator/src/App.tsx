@@ -10,7 +10,7 @@ import { InsuranceQuotes } from './pages/InsuranceQuotes';
 import { Guides } from './pages/Guides';
 
 const NAV = [
-  { path: 'calculator', label: 'True cost' },
+  { path: 'calculator', label: 'Calculator' },
   { path: 'deal', label: 'Deal decoder' },
   { path: 'depreciation', label: 'Depreciation' },
   { path: 'trade-in', label: 'Trade-in' },

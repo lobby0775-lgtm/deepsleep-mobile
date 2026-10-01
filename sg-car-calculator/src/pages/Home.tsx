@@ -6,11 +6,12 @@ import { Breakdown } from '../components/Breakdown';
 import { PRESETS } from '../presets';
 
 const TOOLS = [
-  { href: '#/calculator', title: 'True cost', text: 'Price, loan, insurance, running costs and depreciation, added up to one monthly figure.' },
+  { href: '#/calculator', title: 'Calculator', text: 'Price, loan, insurance, running costs and depreciation, added up to one monthly figure.' },
   { href: '#/deal', title: 'Deal decoder', text: 'Enter a dealer quote line by line. See the real total and the traps in the fine print.' },
   { href: '#/depreciation', title: 'Depreciation', text: 'How much value a new or used car loses each year, and what it will be worth when you sell.' },
   { href: '#/trade-in', title: 'Trade-in', text: "Your car's guaranteed floor value, and whether the offer is any better than that." },
   { href: '#/insurance', title: 'Insurance', text: 'What the premium hides: the discount you lose, the excess you pay, and what a claim really costs.' },
+  { href: '#/quotes', title: 'Compare quotes', text: 'Restate several quotes on the same basis and see which is genuinely cheapest, not just lowest.' },
 ];
 
 export function Home() {
